@@ -8,6 +8,7 @@ set -euo pipefail
 
 # -------------------------------------------------------------------
 # mtr-tests-enhanced.sh v0.9 – Advanced MTR Testing Suite (corrected)
+# Estimated runtime with current defaults (300 pings × 1 s × 126 runs): ~11 hours
 #
 # Performs for each host & test type:
 #  1) Standard mode
