@@ -2,8 +2,6 @@
 
 A comprehensive, automated MTR‑based network path testing suite with JSON logging, DSCP/QoS, MTU & TTL variations, and live console output.
 
----
-
 ## Table of Contents
 
 1. [Overview](#overview)  
@@ -17,13 +15,9 @@ A comprehensive, automated MTR‑based network path testing suite with JSON logg
 9. [Contributing](#contributing)  
 10. [License](#license)  
 
----
-
 ## Overview
 
 `mtr-test-suite` is a Bash script that automates advanced network path analysis using MTR. It runs multiple test rounds against a predefined list of hosts, capturing latency, packet loss, jitter, and routing behavior under a variety of protocols and conditions. All results are output in JSON format with timestamps, displayed live on your console, and archived to datestamped log files for later inspection or automated processing.
-
----
 
 ## Features
 
@@ -52,8 +46,6 @@ A comprehensive, automated MTR‑based network path testing suite with JSON logg
 - **Robust Error Handling**  
   - `set -euo pipefail` plus per‑test fallback logic  
 
----
-
 ## Prerequisites
 
 - **Bash** (v4.x or later)  
@@ -71,8 +63,6 @@ sudo yum install epel-release
 sudo yum install bash mtr jq
 ```
 
----
-
 ## Installation
 
 1. Clone the repository
@@ -84,8 +74,6 @@ sudo yum install bash mtr jq
    ```bash
    chmod +x mtr-tests-enhanced.sh
    ```
-
----
 
 ## Usage 
 
@@ -103,8 +91,6 @@ By default, results will be written to:
 ```bash
 $HOME/logs/mtr_results_YYYYMMDD_HHMMSS.log
 ```
-
----
 
 ## Configuration
 
