@@ -7,25 +7,17 @@ fi
 set -euo pipefail
 
 # -------------------------------------------------------------------
-# mtr-tests-enhanced.sh v0.9 – Advanced MTR Testing Suite
+# mtr-tests-enhanced.sh v0.9 – Advanced MTR Testing Suite (corrected)
 #
-# This script automates comprehensive network path analysis using MTR
-# for a predefined list of hosts, performing multiple test rounds:
+# Performs for each host & test type:
+#  1) Standard mode
+#  2) MTU tests (1400‑byte)
+#  3) DSCP QoS (CS5, AF11)
+#  4) TTL variations (10, 64)
+#  5) Protocol tests (ICMP, UDP, TCP/443)
 #
-# 1) Standard mode: default packet size
-# 2) MTU tests: 1400-byte packets to detect fragmentation and MTU issues
-# 3) QoS/DSCP tests: simulate different traffic classes
-#    (DSCP CS5 for high priority, DSCP AF11 for lower priority)
-# 4) TTL variations: limit max hops to 10 or extend to 64
-#    to uncover asymmetric routes and TTL expiry behaviors
-# 5) Protocol tests: ICMP, UDP, and TCP on port 443
-#    to verify protocol and firewall behavior
-#
-# All measurements are output in JSON format with timestamps,
-# displayed live in the terminal, and logged to:
-# $HOME/logs/mtr_results_YYYYMMDD_HHMMSS.log
-# Errors in individual test rounds are recorded but do not
-# interrupt the overall process.
+# Outputs JSON per run, summarizes into a human table (with host/IP),
+# logs live to console and to $HOME/logs/mtr_results_TIMESTAMP.log.
 # -------------------------------------------------------------------
 
 # 1) Setup
@@ -35,68 +27,89 @@ OUTPUT="$LOG_DIR/mtr_results_$TS.log"
 mkdir -p "$LOG_DIR"
 touch "$OUTPUT"
 
-# 2) Redirect all stdout/stderr to console AND append to log file
+# 2) Redirect all stdout/stderr to console AND log
 exec > >(tee -a "$OUTPUT") 2>&1
 
-# 3) Logging function: prepend timestamp
+# 3) Timestamped log helper
 log() {
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
 }
 
-# 4) Summarize JSON into a table, include hostname and IP per hop
+# 4) Summarize a single JSON output into a table
 summarize_json() {
   local file="$1"
-  # extract destination name and IP
+  # extract destination name & IP (fallbacks for different JSON schemas)
   local dst_name dst_ip
-  dst_name=$(jq -r '.report.dst_name' "$file")
-  dst_ip=$(jq -r '.report.dst_addr // .report.dst_ip' "$file")
+  dst_name=$(jq -r '
+      .report.dst_name?             // 
+      .report.dst_addr?             // 
+      .report.dst_ip?               // 
+      .report.mtr.dst?              // 
+      empty' "$file")
+  dst_ip=$(jq -r '
+      .report.dst_addr?             // 
+      .report.dst_ip?               // 
+      .report.mtr.dst?              // 
+      empty' "$file")
 
   echo
-  echo "Results for: $dst_name ($dst_ip)"
-  echo "Hop  Host               IP               Loss%  Snt  Last   Avg    Best   Wrst   StDev"
-  # include host and ip for each hop
-  jq -r '.report.hubs[] | [(.count|tostring), .host, .ip, (."Loss%"|tostring), (.Snt|tostring), (.Last|tostring), (.Avg|tostring), (.Best|tostring), (.Wrst|tostring), (.StDev|tostring)] | @tsv' "$file" |
-    column -t
+  echo "Results for: ${dst_name:-Unknown} (${dst_ip:-Unknown})"
+  echo "Hop  Host                          IP               Loss%   Snt   Last    Avg     Best    Wrst    StDev"
+  jq -r '
+    .report.hubs[]? |
+      ( .count                     | tostring ) as $hop
+    | ( .host                      | sub(" \\(.*\\)"; "") )  as $host
+    | ( ( .host                      | capture("\\((?<ip>[^)]+)\\)").ip )
+        // .ip? // "" )             as $ip
+    | (."Loss%"                    | tostring ) as $loss
+    | (.Snt                        | tostring ) as $snt
+    | (.Last                       | tostring ) as $last
+    | (.Avg                        | tostring ) as $avg
+    | (.Best                       | tostring ) as $best
+    | (.Wrst                       | tostring ) as $wrst
+    | (.StDev                      | tostring ) as $stdev
+    | [ $hop, $host, $ip, $loss, $snt, $last, $avg, $best, $wrst, $stdev ]
+      | @tsv
+  ' "$file" | column -t
   echo
 }
 
-# 5) Define test types
+# 5) Test types
 declare -A TESTS=(
-  [IPv4]="-4"
-  [IPv6]="-6"
-  [UDP4]="-u -4"
-  [UDP6]="-u -6"
-  [TCP4]="-T -P 443 -4"
-  [TCP6]="-T -P 443 -6"
+  [ICMP4]="-4 -n -b -i 1 -c 300 -r --json"
+  [ICMP6]="-6 -n -b -i 1 -c 300 -r --json"
+  [UDP4]="-u -4 -n -b -i 1 -c 300 -r --json"
+  [UDP6]="-u -6 -n -b -i 1 -c 300 -r --json"
+  [TCP4]="-T -P 443 -4 -n -b -i 1 -c 300 -r --json"
+  [TCP6]="-T -P 443 -6 -n -b -i 1 -c 300 -r --json"
 )
 
 # 6) Host lists
 HOSTS_IPV4=( netcologne.de google.com wikipedia.org amazon.de )
 HOSTS_IPV6=( netcologne.de google.com wikipedia.org )
 
-# 7) Test rounds: scenarios
+# 7) Test rounds
 declare -A ROUNDS=(
-  [Standard]=""            # default packet size
-  [MTU1400]="-s 1400"     # fragmentation/MTU check
-  [DSCP_CS5]="--dscp 40"  # high priority traffic
-  [DSCP_AF11]="--dscp 10" # lower priority traffic
-  [TTL10]="-m 10"         # limit to 10 hops
-  [TTL64]="-m 64"         # extend to 64 hops
+  [Standard]=""
+  [MTU1400]="-s 1400"
+  [DSCP_CS5]="--dscp 40"
+  [DSCP_AF11]="--dscp 10"
+  [TTL10]="-m 10"
+  [TTL64]="-m 64"
 )
 
-# 8) Start tests
+# 8) Run everything
 log "Starting MTR tests (rounds: ${!ROUNDS[*]})"
-
 for ROUND in "${!ROUNDS[@]}"; do
-  EXTRA_OPTS="${ROUNDS[$ROUND]}"
+  EXTRA_OPTS=${ROUNDS[$ROUND]}
   log "=== Round: $ROUND ${EXTRA_OPTS:+(options: $EXTRA_OPTS)} ==="
 
   for TYPE in "${!TESTS[@]}"; do
-    BASE_OPTS="${TESTS[$TYPE]} -n -b -i 1 -c 300 -r --json"
-    OPTIONS="$BASE_OPTS $EXTRA_OPTS"
+    BASE_OPTS=${TESTS[$TYPE]}
+    OPTS="$BASE_OPTS $EXTRA_OPTS"
 
     log "--- Running $TYPE tests [Round: $ROUND] ---"
-
+    # choose IPv4 vs IPv6 host list
     if [[ "$TYPE" == *6 ]]; then
       HOSTS=( "${HOSTS_IPV6[@]}" )
     else
@@ -104,19 +117,16 @@ for ROUND in "${!ROUNDS[@]}"; do
     fi
 
     for HOST in "${HOSTS[@]}"; do
-      log "Running $TYPE → $HOST [Round: $ROUND]"
+      log "→ $TYPE → $HOST [Round: $ROUND]"
       tmpfile=$(mktemp)
-      # run MTR, append JSON to log and save to tmpfile
-      if ! mtr $OPTIONS "$HOST" 2>&1 | tee -a "$OUTPUT" > "$tmpfile"; then
-        log "Error during $TYPE → $HOST in round $ROUND, continuing"
+      if ! mtr $OPTS "$HOST" 2>&1 | tee -a "$OUTPUT" >"$tmpfile"; then
+        log "⚠️  Error during $TYPE → $HOST in round $ROUND, continuing"
       fi
-      # print human-readable table with hostname & IP, correct Loss%
       summarize_json "$tmpfile"
       rm -f "$tmpfile"
       log "✓ Completed $TYPE → $HOST [Round: $ROUND]"
     done
   done
-
 done
 
 log "All tests completed. Results written to: $OUTPUT"
