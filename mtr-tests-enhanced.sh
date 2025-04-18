@@ -7,8 +7,8 @@ fi
 set -euo pipefail
 
 # -------------------------------------------------------------------
-# mtr-tests-enhanced.sh v0.9 – Advanced MTR Testing Suite 
-# Estimated runtime with current defaults (300 pings × 1 s × 126 runs): ~11 hours
+# mtr-tests-enhanced.sh v0.9 – Advanced MTR Testing Suite (corrected)
+# Estimated runtime with current defaults (~11 hours)
 #
 # Performs for each host & test type:
 #  1) Standard mode
@@ -42,47 +42,41 @@ summarize_json() {
   # extract destination name & IP (fallbacks for different JSON schemas)
   local dst_name dst_ip
   dst_name=$(jq -r '
-      .report.dst_name?             // 
-      .report.dst_addr?             // 
-      .report.dst_ip?               // 
-      .report.mtr.dst?              // 
-      empty' "$file")
+      .report.dst_name? // .report.dst_addr? // .report.dst_ip? // .report.mtr.dst? // empty
+  ' "$file")
   dst_ip=$(jq -r '
-      .report.dst_addr?             // 
-      .report.dst_ip?               // 
-      .report.mtr.dst?              // 
-      empty' "$file")
+      .report.dst_addr? // .report.dst_ip? // .report.mtr.dst? // empty
+  ' "$file")
 
   echo
   echo "Results for: ${dst_name:-Unknown} (${dst_ip:-Unknown})"
-  echo "Hop  Host                          IP               Loss%   Snt   Last    Avg     Best    Wrst    StDev"
+  echo "Hop  Host                                    IP               Loss%   Snt   Last    Avg     Best    Wrst    StDev"
   jq -r '
     .report.hubs[]? |
-      ( .count                     | tostring ) as $hop
-    | ( .host                      | sub(" \\(.*\\)"; "") )  as $host
-    | ( ( .host                      | capture("\\((?<ip>[^)]+)\\)").ip )
-        // .ip? // "" )             as $ip
-    | (."Loss%"                    | tostring ) as $loss
-    | (.Snt                        | tostring ) as $snt
-    | (.Last                       | tostring ) as $last
-    | (.Avg                        | tostring ) as $avg
-    | (.Best                       | tostring ) as $best
-    | (.Wrst                       | tostring ) as $wrst
-    | (.StDev                      | tostring ) as $stdev
-    | [ $hop, $host, $ip, $loss, $snt, $last, $avg, $best, $wrst, $stdev ]
-      | @tsv
+      (.count|tostring)        as $hop  |
+      (.host//"")              as $host |
+      (.ip//"")                as $ip   |
+      (."Loss%"|tostring)      as $loss |
+      (.Snt|tostring)          as $snt  |
+      (.Last|tostring)         as $last |
+      (.Avg|tostring)          as $avg  |
+      (.Best|tostring)         as $best |
+      (.Wrst|tostring)         as $wrst |
+      (.StDev|tostring)        as $stdev|
+      [ $hop, $host, $ip, $loss, $snt, $last, $avg, $best, $wrst, $stdev ] |
+      @tsv
   ' "$file" | column -t
   echo
 }
 
-# 5) Test types
+# 5) Test types (no -n so hostnames are resolved)
 declare -A TESTS=(
-  [ICMP4]="-4 -n -b -i 1 -c 300 -r --json"
-  [ICMP6]="-6 -n -b -i 1 -c 300 -r --json"
-  [UDP4]="-u -4 -n -b -i 1 -c 300 -r --json"
-  [UDP6]="-u -6 -n -b -i 1 -c 300 -r --json"
-  [TCP4]="-T -P 443 -4 -n -b -i 1 -c 300 -r --json"
-  [TCP6]="-T -P 443 -6 -n -b -i 1 -c 300 -r --json"
+  [ICMP4]="-4 -b -i 1 -c 300 -r --json"
+  [ICMP6]="-6 -b -i 1 -c 300 -r --json"
+  [UDP4]="-u -4 -b -i 1 -c 300 -r --json"
+  [UDP6]="-u -6 -b -i 1 -c 300 -r --json"
+  [TCP4]="-T -P 443 -4 -b -i 1 -c 300 -r --json"
+  [TCP6]="-T -P 443 -6 -b -i 1 -c 300 -r --json"
 )
 
 # 6) Host lists
