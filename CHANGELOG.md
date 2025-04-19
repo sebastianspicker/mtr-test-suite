@@ -2,47 +2,63 @@
 
 All notable changes to **mtr-test-suite**.
 
+## [v1.0] - 2025-04-20
+### Added
+- **Dual Log Files**: Raw JSON output is now written to a separate `JSON_LOG` (`mtr_results_TIMESTAMP.json.log`), and human‑readable tables to `TABLE_LOG` (`mtr_summary_TIMESTAMP.log`).
+- **Enhanced Table Formatting**: Hostnames are no longer truncated; columns are widened to accommodate long names. Missing IPs show `N/A`, so Loss% and subsequent columns remain aligned.
+- **New Test Types**:
+  - **MPLS** tests (`-e`) for MPLS label stack inspection.
+  - **AS‑lookup** tests (`-z --aslookup`) to display autonomous system numbers per hop.
+- **Additional Rounds**:
+  - **FirstTTL3** (`-f 3`): start probing from TTL=3.
+  - **Timeout5** (`-Z 5`): extend socket grace time to 5 s per hop.
+- **Header Update**: Bumped to v1.0 and updated estimated runtime to ~280 runs × 5 min ≈ 24 h.
+
 ## [v0.9] - 2025-04-18
 ### Fixed
-- **JSON field parsing**: Improved fallback logic for `.report.dst_name` / `.report.dst_addr` / `.report.dst_ip` / `.report.mtr.dst` to avoid `null` targets.  
-- **Packet loss display**: Corrected extraction of the `"Loss%"` field so that actual numeric values are shown instead of `null`.  
-- **Hostname/IP extraction**: Enhanced regex to reliably separate hostnames and IPs (captured from `host` or `.ip`), ensuring both appear in the summary table.
+- JSON field parsing for destination name/IP: added robust fallbacks to avoid `null`.
+- Packet loss (`"Loss%"`) extraction corrected to prevent empty or misaligned values.
+- Table generation regex improved to reliably handle hostnames and IPs in separate columns.
 
 ## [v0.8] - 2025-04-16
 ### Added
-- **Real‑time JSON + table output**: Merged raw JSON capture with immediate, human‑readable table display for every host/test iteration.  
-- **Iterative logging**: Switched to `exec > >(tee -a …) 2>&1` so that all stdout/stderr—including `mtr --json`—streams live to console and log file.  
-- **Destination extraction**: Introduced robust logic to extract and print the target’s DNS name and IP address in the summary header.
+- Combined raw JSON logging with immediate table summaries in Bash.
+- Switched global logging to `exec > >(tee -a ...) 2>&1` for real‑time console+file output.
+- Destination extraction logic introduced to display target name and IP in summary header.
 
 ## [v0.7] - 2025-04-14
 ### Added
-- **`summarize_json()`**: New function that formats each hop’s metrics into a well‑aligned table using `jq` + `column`.  
-- **Dependency integration**: Leveraged `jq` for JSON parsing and `column -t` for neat tabular output directly in Bash.
+- `summarize_json()` function: formats per‑hop metrics into neat tables using `jq` + `column`.
+- Integrated `jq` for JSON parsing and `column -t` for alignment.
 
 ## [v0.6] - 2025-04-12
 ### Changed
-- **ICMP enforcement**: Removed explicit `-I` option; now default ICMP tests use `-4`/`-6` flags for IPv4/IPv6.  
-- **Global logging overhaul**: Adopted `exec > >(tee -a LOGFILE) 2>&1` to guarantee no output is lost, replacing piecemeal redirections.
+- Removed `-n` (no‑dns) to allow reverse DNS lookups by default.
+- Adopted global `tee` redirection to ensure no output is lost between console and log file.
 
 ## [v0.5] - 2025-04-10
 ### Added
-- **DSCP QoS tests**: Rounds for `--dscp 40` (CS5) and `--dscp 10` (AF11) to simulate high‑ and low‑priority traffic classes.  
-- **TTL variation rounds**: New scenarios limiting hop count to 10 (`-m 10`) and extending to 64 (`-m 64`) to reveal asymmetric paths and TTL expiry behaviors.
+- QoS/TOS test rounds: DSCP CS5 (`--tos 160`) and AF11 (`--tos 40`).
+- TTL variation rounds: `-m 10` and `-m 64` for limiting/extending hop counts.
 
 ## [v0.4] - 2025-04-08
 ### Added
-- **TCP SYN tests**: Support for TCP on port 443 (`-T -P 443`) over both IPv4 and IPv6 to verify firewall and router handling.  
-- **MTU Round**: Introduced `-s 1400` tests to detect fragmentation or MTU mismatches early.
+- TCP SYN tests on port 443 (`-T -P 443`) for both IPv4 and IPv6.
+- MTU probe round with 1400‑byte packets (`-s 1400`) to detect fragmentation.
 
 ## [v0.3] - 2025-04-06
 ### Changed
-- **Hostname & IP display**: Added `-b` (both) option in `mtr` calls to ensure DNS names and IP addresses appear in combined output.
+- Added `-b` (show-ips) flag to display both hostnames and IP addresses in `mtr` output.
 
 ## [v0.2] - 2025-04-04
 ### Changed
-- **Increased statistical depth**: Packet count bumped to 300 per round and interval lowered to 1s for richer per‑hop metrics. (Earlier drafts used 600/0.5s.)
+- Increased ping count to 300 (`-c 300`) and interval to 1 s (`-i 1`) for deeper per‑hop statistics.
 
 ## [v0.1] - 2025-04-02
 ### Added
-- **Initial release**: Basic Bash automation of `mtr -4/-6` tests for ICMP and UDP, with per‑run JSON logging and timestamped log filenames.  
-- **Live console feedback**: Simple `log()` function added to prepend timestamps and guide the user through each test step.
+- Initial release: automated MTR tests for ICMP and UDP (IPv4/IPv6) with timestamped JSON logs and live console output.
+- Basic logging function with date‑based filenames.
+
+---
+*See [README.md](README.md) for usage and configuration details.*
+
