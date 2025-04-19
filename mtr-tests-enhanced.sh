@@ -45,39 +45,35 @@ TS=$(date +'%Y%m%d_%H%M%S')
 JSON_LOG="$LOG_DIR/mtr_results_${TS}.json.log"
 TABLE_LOG="$LOG_DIR/mtr_summary_${TS}.log"
 mkdir -p "$LOG_DIR"
-touch "$JSON_LOG" "$TABLE_LOG"
+:> "$JSON_LOG"  :> "$TABLE_LOG"
 
 # Logging helper
-log() {
-  local msg="[$(date +'%Y-%m-%d %H:%M:%S')] $*"
-  echo "$msg" | tee -a "$TABLE_LOG"
-}
+log() { echo "[$(date +'%F %T')] $*" | tee -a "$TABLE_LOG"; }
 
 # Summarize JSON to table
 summarize_json() {
-  local file="$1"
+  local f=$1
   local dst_name dst_ip
-  dst_name=$(jq -r '.report.dst_name? // .report.dst_addr? // .report.dst_ip? // .report.mtr.dst? // "Unknown"' "$file")
-  dst_ip=$(jq -r '.report.dst_addr? // .report.dst_ip? // .report.mtr.dst? // "Unknown"' "$file")
+  dst_name=$(jq -r '.report.dst_name? // .report.dst_addr? // .report.dst_ip? // .report.mtr.dst? // "???"' "$f")
+  dst_ip=$(jq -r   '.report.dst_addr? // .report.dst_ip? // .report.mtr.dst? // "???"'             "$f")
 
   {
-    echo
-    echo "Results for: ${dst_name} (${dst_ip})"
-    echo -e "Hop	Host	IP	Loss%	Snt	Last	Avg	Best	Wrst	StDev"
+    echo; echo "Results for: ${dst_name} (${dst_ip})"
+    printf 'Hop\tHost\tIP\tLoss%%\tSnt\tLast\tAvg\tBest\tWrst\tStDev\n'
     jq -r '
-      .report.hubs[]? |
-        (.count|tostring)        as $hop  |
-        (.host//"N/A")          as $host |
-        (.ip//"N/A")            as $ip   |
-        (."Loss%"|tostring)     as $loss|
-        (.Snt|tostring)          as $snt  |
-        (.Last|tostring)         as $last|
-        (.Avg|tostring)          as $avg  |
-        (.Best|tostring)         as $best |
-        (.Wrst|tostring)         as $wrst |
-        (.StDev|tostring)        as $stdev|
-        [ $hop, $host, $ip, $loss, $snt, $last, $avg, $best, $wrst, $stdev ] | @tsv
-    ' "$file" | column -t -s $'\t'
+      .report.hubs[]? as $h |
+      [
+        ($h.count // 0),
+        ( $h.host // "???" | sub(" \\(.*"; "") ),
+        ( $h.ip   // ( $h.host | capture("\\((?<ip>[^)]+)\\)").ip? ) // "???" ),
+        ($h."Loss%" // 0),
+        ($h.Snt     // 0),
+        ($h.Last    // 0),
+        ($h.Avg     // 0),
+        ($h.Best    // 0),
+        ($h.Wrst    // 0),
+        ($h.StDev   // 0)
+      ] | map(tostring) | @tsv' "$f" | column -t -s $'\t'
     echo
   } | tee -a "$TABLE_LOG"
 }
@@ -96,8 +92,7 @@ declare -A TESTS=(
   [AS6]="-z --aslookup -6 -b -i 1 -c 300 -r --json"
 )
 # enforce test order
-TEST_ORDER=(ICMP4 ICMP6 UDP4 UDP6 TCP4 TCP6 MPLS4 MPLS6 AS4 AS6)
-TEST_ORDER=(ICMP4 ICMP6 UDP4 UDP6 TCP4 TCP6 MPLS4 MPLS6 AS4 AS6)
+TEST_ORDER=(ICMP4 ICMP6 UDP4 UDP6 TCP4 TCP6 MPLS4 MPLS6 AS4 AS6)  # << only once
 
 # Host lists
 HOSTS_IPV4=(netcologne.de google.com wikipedia.org amazon.de)
@@ -124,15 +119,10 @@ for ROUND in "${ROUND_ORDER[@]}"; do
   log "=== Round: $ROUND ${EXTRA:+(opts: $EXTRA)} ==="
 
   for TYPE in "${TEST_ORDER[@]}"; do
-    BASE_OPTS=${TESTS[$TYPE]}
-    OPTS="$BASE_OPTS $EXTRA"
+    OPTS="${TESTS[$TYPE]} $EXTRA"
     log "--- $TYPE tests in Round: $ROUND ---"
 
-    if [[ "$TYPE" == *6 ]]; then
-      HOSTS=("${HOSTS_IPV6[@]}")
-    else
-      HOSTS=("${HOSTS_IPV4[@]}")
-    fi
+    [[ $TYPE == *6 ]] && HOSTS=("${HOSTS_IPV6[@]}") || HOSTS=("${HOSTS_IPV4[@]}")
 
     for H in "${HOSTS[@]}"; do
       log "→ $TYPE → $H"
@@ -148,5 +138,4 @@ for ROUND in "${ROUND_ORDER[@]}"; do
 done
 
 log "All tests done. JSON_LOG=$JSON_LOG, TABLE_LOG=$TABLE_LOG"
-```
 
