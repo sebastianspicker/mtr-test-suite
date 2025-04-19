@@ -8,7 +8,7 @@ fi
 set -euo pipefail
 
 # -------------------------------------------------------------------
-# mtr-tests-enhanced.sh v1.0 – Advanced MTR Testing Suite (corrected)
+# mtr-tests-enhanced.sh v1.0 – Advanced MTR Testing Suite
 # Estimated runtime with defaults (~280 runs × 5 min ≈ 24 h)
 #
 # Test Types (in exact sequence):
