@@ -1,6 +1,6 @@
-# mtr-test-suite
+# mtr-test-suite v1.0
 
-A comprehensive, automated MTR‑based network path testing suite with JSON logging, DSCP/QoS, MTU & TTL variations, and live console output.
+An advanced, automated MTR-based network path testing suite with JSON logging, DSCP/TOS, MTU & TTL variations, MPLS & AS‑lookup, and live console output.
 
 ## Table of Contents
 
@@ -12,131 +12,152 @@ A comprehensive, automated MTR‑based network path testing suite with JSON logg
 6. [Configuration](#configuration)  
 7. [Logging & Output](#logging--output)  
 8. [Advanced Integration](#advanced-integration)  
-9. [Contributing](#contributing)  
-10. [License](#license)
+9. [Changelog](#changelog)  
+10. [Contributing](#contributing)  
+11. [License](#license)
 
 ## Overview
 
-`mtr-test-suite` is a Bash script that automates advanced network path analysis using MTR. It runs multiple test rounds against a predefined list of hosts, capturing latency, packet loss, jitter, and routing behavior under a variety of protocols and conditions. All results are output in JSON format with timestamps, displayed live on your console, and archived to datestamped log files for later inspection or automated processing.
+`mtr-test-suite` v1.0 is a Bash script that automates comprehensive network path analysis using MTR. It runs multiple test rounds against a set of hosts, capturing latency, packet loss, jitter, and routing behaviors under diverse protocols and conditions. It produces:
+
+- **JSON_LOG**: raw per-run JSON output archived to `mtr_results_<timestamp>.json.log`  
+- **TABLE_LOG**: human-readable summaries archived to `mtr_summary_<timestamp>.log`  
+- **Console**: real-time progress, errors, and table output
+
+Estimated runtime with defaults (~280 runs × 5 min each ≈ 24 hours).
 
 ## Features
 
 - **Protocol Coverage**  
   - ICMP (IPv4 & IPv6)  
   - UDP (IPv4 & IPv6)  
-  - TCP on port 443 (IPv4 & IPv6)
-- **MTU / Fragmentation Tests**  
-  - 1400‑byte packet sizing to detect MTU mismatches
-- **QoS / DSCP Marking**  
-  - DSCP CS5 (high priority)  
-  - DSCP AF11 (lower priority)
-- **TTL Variations**  
-  - TTL limit to 10 hops  
-  - TTL extension to 64 hops
-- **Machine‑Readable JSON Output**  
-  - Ideal for `jq` parsing or ingestion into time‑series databases
-- **Live Console Logging**  
-  - Real‑time progress and results via `tee`
+  - TCP (port 443 IPv4 & IPv6)  
+  - MPLS label stack (`-e`)  
+  - AS‑lookup (`-z --aslookup`)
+- **Test Scenarios**  
+  - Standard  
+  - MTU 1400-byte (`-s 1400`)  
+  - DSCP/TOS CS5 (`--tos 160`), AF11 (`--tos 40`)  
+  - TTL variation: 10, 64, first run at TTL 3 (`-f 3`)  
+  - Socket timeout extension (`-Z 5`)
+- **Dual Logging**  
+  - Raw JSON for automated parsing  
+  - Tabular summaries for human readability
+- **Live Console Output**  
+  - Progress & errors via `log()`  
+  - Table display via `jq` + `column`
 - **Robust Error Handling**  
-  - `set -euo pipefail` with per‑test fallback logic ensures uninterrupted suite execution
+  - `set -euo pipefail`  
+  - Per-test fallback ensures suite continues on failures
 
 ## Prerequisites
 
-- **Bash** (v4.x or later)  
-- **MTR** (with JSON support)  
+- **Bash** (v4.x+)  
+- **MTR** (with JSON, MPLS, AS‑lookup support)  
 - **jq**  
+- **column** (GNU coreutils)
 
-**Debian / Ubuntu**:
+**Debian/Ubuntu**:
 ```bash
 sudo apt update
-sudo apt install bash mtr jq
+sudo apt install bash mtr jq coreutils
 ```
-**CentOS / RHEL**:
+**CentOS/RHEL**:
 ```bash
 sudo yum install epel-release
-sudo yum install bash mtr jq
+sudo yum install bash mtr jq coreutils
 ```
 
 ## Installation
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/<your-org>/mtr-test-suite.git
-   cd mtr-test-suite
-   ```
-2. **Make the script executable**:
-   ```bash
-   chmod +x mtr-tests-enhanced.sh
-   ```
+```bash
+git clone https://github.com/<your-org>/mtr-test-suite.git
+cd mtr-test-suite
+chmod +x mtr-tests-enhanced.sh
+```
 
 ## Usage
 
-Run the suite directly:
 ```bash
 ./mtr-tests-enhanced.sh
 ```
-Or explicitly via Bash:
+
+Abort anytime with **Ctrl+C**; partial results remain saved.
+
+### Running as a Background Job
+
+To launch the suite detached from your terminal:
 ```bash
-bash mtr-tests-enhanced.sh
+nohup bash mtr-tests-enhanced.sh > /dev/null 2>&1 &
+```
+This will continue running after you log out.
+
+To follow the raw JSON logs in real time:
+```bash
+tail -f ~/logs/mtr_results_*.json.log
 ```
 
-Press **Ctrl+C** to abort at any time—partial results will remain in the log.
-
-By default, results are written to:
+To follow the human-readable summaries in real time:
 ```bash
-$HOME/logs/mtr_results_YYYYMMDD_HHMMSS.log
+tail -f ~/logs/mtr_summary_*.log
 ```
 
 ## Configuration
 
-### Host Lists
+### Hosts
 
-At the top of the script, configure your target hosts:
+Edit at top of script:
 ```bash
 HOSTS_IPV4=( netcologne.de google.com wikipedia.org amazon.de )
 HOSTS_IPV6=( netcologne.de google.com wikipedia.org )
 ```
 
-### Test Scenarios
+### Test Types
 
-Adjust the `ROUNDS` associative array for custom test rounds:
+Adjust or extend `TESTS` mapping:
 ```bash
-declare -A ROUNDS=(
-  [Standard]=""
-  [MTU1400]="-s 1400"
-  [DSCP_CS5]="--dscp 40"
-  [DSCP_AF11]="--dscp 10"
-  [TTL10]="-m 10"
-  [TTL64]="-m 64"
+declare -A TESTS=(
+  [ICMP4]="-4 -b ...",
+  [UDP4] ="-u -4 -b ...",
+  [MPLS4]="-e -4 ...",
+  [AS4]  ="-z --aslookup -4 ...",
+  …
 )
 ```
 
-### Protocol Types
+### Rounds
 
-Modify the `TESTS` mapping to add or remove protocols:
+Modify `ROUNDS` array:
 ```bash
-declare -A TESTS=(
-  [ICMP4]="-4 -n -b -i 1 -c 300 -r --json"
-  [ICMP6]="-6 -n -b -i 1 -c 300 -r --json"
-  [UDP4]="-u -4 -n -b -i 1 -c 300 -r --json"
-  [UDP6]="-u -6 -n -b -i 1 -c 300 -r --json"
-  [TCP4]="-T -P 443 -4 -n -b -i 1 -c 300 -r --json"
-  [TCP6]="-T -P 443 -6 -n -b -i 1 -c 300 -r --json"
+declare -A ROUNDS=(
+  [Standard]="",
+  [MTU1400]="-s 1400",
+  [TOS_CS5]="--tos 160",
+  [DSCP_AF11]="--tos 40",
+  [TTL10]="-m 10",
+  [TTL64]="-m 64",
+  [FirstTTL3]="-f 3",
+  [Timeout5]="-Z 5",
 )
 ```
 
 ## Logging & Output
 
-- **Live Console**: All test progress and raw JSON are streamed to your terminal.  
-- **Log Files**: Each run creates a timestamped log in `~/logs/`.  
-- **JSON Parsing**: Extract key metrics with `jq`:
-  ```bash
-  jq '.report.hubs[] | {hop: .count, loss: ."Loss%", avg: .Avg}' ~/logs/mtr_results_*.log
-  ```
+- **JSON_LOG**: `~/logs/mtr_results_<timestamp>.json.log`  
+- **TABLE_LOG**: `~/logs/mtr_summary_<timestamp>.log`  
+- **Console**: real-time progress & table display
+
+**Parse JSON**:
+```bash
+jq '.report.hubs[] | {hop: .count, loss: ."Loss%", avg: .Avg}' ~/logs/*.json.log
+```
 
 ## Advanced Integration
 
-- **Alerting**: Schedule in cron and parse CSV/JSON for threshold breaches to send emails or Slack notifications.  
-- **Time‑Series DB**: Convert JSON entries to InfluxDB line protocol or Prometheus pushgateway format.  
-- **GeoIP & ASN Enrichment**: Pipe hop IPs through `geoiplookup` and `whois` for location/network details.  
-- **Parallel Execution**: Use GNU `parallel` to run separate hosts or rounds concurrently.
+- **Cron & Alerts**: schedule and parse logs for threshold breaches  
+- **Time‑Series DB**: convert JSON to InfluxDB/Prometheus format  
+- **Geo/ASN Enrichment**: add `geoiplookup`/`whois` in `summarize_json()`
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
