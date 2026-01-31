@@ -13,8 +13,9 @@ An advanced, automated MTR-based network path testing suite with JSON logging, D
 7. [Logging & Output](#logging--output)  
 8. [Advanced Integration](#advanced-integration)  
 9. [Changelog](#changelog)  
-10. [Contributing](#contributing)  
-11. [License](#license)
+10. [Development / Validation](#development--validation)  
+11. [Contributing](#contributing)  
+12. [License](#license)
 
 ## Overview
 
@@ -52,43 +53,68 @@ Estimated runtime with defaults (~280 runs × 5 min each ≈ 24 hours).
 
 ## Prerequisites
 
-- **Bash** (v4.x+)  
-- **MTR** (with JSON, MPLS, AS‑lookup support)  
+- **Bash** (v4.x+ required to run the full suite)  
+- **MTR** (with `--json`, MPLS, AS‑lookup support)  
 - **jq**  
-- **column** (GNU coreutils)
+- **column** (`util-linux`)
 
 **Debian/Ubuntu**:
 ```bash
 sudo apt update
-sudo apt install bash mtr jq coreutils
+sudo apt install bash jq util-linux
+sudo apt install mtr # package name may also be: mtr-tiny
 ```
 **CentOS/RHEL**:
 ```bash
 sudo yum install epel-release
-sudo yum install bash mtr jq coreutils
+sudo yum install bash mtr jq util-linux
 ```
+
+**macOS (Homebrew)**:
+```bash
+brew install bash mtr jq
+```
+Note: macOS ships Bash 3.2 by default; the suite requires Bash 4+.
 
 ## Installation
 
 ```bash
 git clone https://github.com/<your-org>/mtr-test-suite.git
 cd mtr-test-suite
-chmod +x mtr-tests-enhanced.sh
+chmod +x mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
 ```
 
 ## Usage
 
 ```bash
-./mtr-tests-enhanced.sh
+./mtr-test-suite.sh
 ```
 
+Note: depending on how `mtr` is installed on your system, some probe types may require elevated privileges (e.g. `sudo`) or `cap_net_raw`.
+
+Wrappers:
+- `mtr-tests-enhanced.sh` (legacy entrypoint)
+- `mtr-test-suite_min-comments.sh` (legacy/minimal header)
+
+Both wrappers exec the canonical `mtr-test-suite.sh`.
+
 Abort anytime with **Ctrl+C**; partial results remain saved.
+
+### Options
+
+```bash
+./mtr-test-suite.sh --help
+./mtr-test-suite.sh --log-dir /var/log/mtr-suite
+./mtr-test-suite.sh --json-log ./mtr.json.log --table-log ./mtr.table.log
+./mtr-test-suite.sh --no-summary     # JSON only (no jq/column)
+./mtr-test-suite.sh --dry-run        # print planned runs
+```
 
 ### Running as a Background Job
 
 To launch the suite detached from your terminal:
 ```bash
-nohup bash mtr-tests-enhanced.sh > /dev/null 2>&1 &
+nohup ./mtr-test-suite.sh > /dev/null 2>&1 &
 ```
 This will continue running after you log out.
 
@@ -106,7 +132,7 @@ tail -f ~/logs/mtr_summary_*.log
 
 ### Hosts
 
-Edit at top of script:
+Edit in `mtr-test-suite.sh`:
 ```bash
 HOSTS_IPV4=( netcologne.de google.com wikipedia.org amazon.de )
 HOSTS_IPV6=( netcologne.de google.com wikipedia.org )
@@ -114,7 +140,7 @@ HOSTS_IPV6=( netcologne.de google.com wikipedia.org )
 
 ### Test Types
 
-Adjust or extend `TESTS` mapping:
+Adjust or extend the `TESTS` mapping in `mtr-test-suite.sh`:
 ```bash
 declare -A TESTS=(
   [ICMP4]="-4 -b ...",
@@ -127,17 +153,17 @@ declare -A TESTS=(
 
 ### Rounds
 
-Modify `ROUNDS` array:
+Modify the `ROUNDS` array in `mtr-test-suite.sh`:
 ```bash
 declare -A ROUNDS=(
   [Standard]="",
-  [MTU1400]="-s 1400",
-  [TOS_CS5]="--tos 160",
-  [DSCP_AF11]="--tos 40",
-  [TTL10]="-m 10",
-  [TTL64]="-m 64",
-  [FirstTTL3]="-f 3",
-  [Timeout5]="-Z 5",
+  [MTU1400]="-s 1400",
+  [TOS_CS5]="--tos 160",
+  [TOS_AF11]="--tos 40",
+  [TTL10]="-m 10",
+  [TTL64]="-m 64",
+  [FirstTTL3]="-f 3",
+  [Timeout5]="-Z 5",
 )
 ```
 
@@ -161,3 +187,20 @@ jq '.report.hubs[] | {hop: .count, loss: ."Loss%", avg: .Avg}' ~/logs/*.json.log
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
+
+## Development / Validation
+
+```bash
+make validate
+
+shfmt -w -i 2 -ci mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
+shellcheck -x mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+See [LICENSE](LICENSE).
