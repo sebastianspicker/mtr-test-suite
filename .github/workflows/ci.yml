@@ -4,16 +4,48 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  shell:
-    runs-on: ubuntu-latest
+  lint:
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Install tools
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck shfmt
 
-      - name: Validate
+      - name: Shell validation
         run: make validate
+
+      - name: Dry-run smoke test
+        run: ./mtr-test-suite.sh --dry-run --no-summary
+
+      - name: PowerShell static analysis
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          Invoke-ScriptAnalyzer -Path NetTestSuite.ps1 -Severity Error -EnableExit
+
+  secret_scan:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
+        with:
+          args: --no-git --redact
+
+  dependency_review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/dependency-review-action@3c4e3dcb1aa7874d2c16be7d79418e9b7efd6261 # v4.8.2

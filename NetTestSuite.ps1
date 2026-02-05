@@ -64,26 +64,26 @@ $Rounds = @(
   # Standard baseline
   @{
     Name        = 'Standard'
-    PingArgs4   = { param($h,$n) "-4 -n $n $h" }
-    PingArgs6   = { param($h,$n) "-6 -n $n $h" }
-    TracertArgs = { param($ipVer,$h) "$ipVer -d -h $($TraceMaxHops) -w $($TraceTimeoutMs) $h" }
-    PathpingArgs= { param($ipVer,$h) "$ipVer /q $($PathpingProbes) /w $($PathpingTimeoutMs) $h" }
+    PingArgs4   = { param($h,$n) @('-4','-n',"$n",$h) }
+    PingArgs6   = { param($h,$n) @('-6','-n',"$n",$h) }
+    TracertArgs = { param($ipVer,$h) @($ipVer,'-d','-h',"$TraceMaxHops",'-w',"$TraceTimeoutMs",$h) }
+    PathpingArgs= { param($ipVer,$h) @($ipVer,'/q',"$PathpingProbes",'/w',"$PathpingTimeoutMs",$h) }
   }
   # MTU 1400; DF for IPv4 only (IPv6 PMTU doesn’t fragment in transit)
   @{
     Name        = 'MTU1400_DF'
-    PingArgs4   = { param($h,$n) "-4 -f -l 1400 -n $n $h" }
-    PingArgs6   = { param($h,$n) "-6 -l 1400 -n $n $h" }  # no -f for IPv6
-    TracertArgs = { param($ipVer,$h) "$ipVer -d -h $($TraceMaxHops) -w $($TraceTimeoutMs) $h" }
-    PathpingArgs= { param($ipVer,$h) "$ipVer /q $($PathpingProbes) /w $($PathpingTimeoutMs) $h" }
+    PingArgs4   = { param($h,$n) @('-4','-f','-l','1400','-n',"$n",$h) }
+    PingArgs6   = { param($h,$n) @('-6','-l','1400','-n',"$n",$h) }  # no -f for IPv6
+    TracertArgs = { param($ipVer,$h) @($ipVer,'-d','-h',"$TraceMaxHops",'-w',"$TraceTimeoutMs",$h) }
+    PathpingArgs= { param($ipVer,$h) @($ipVer,'/q',"$PathpingProbes",'/w',"$PathpingTimeoutMs",$h) }
   }
   # TTL and timeout emphasis
   @{
     Name        = 'TTL64_Timeout5s'
-    PingArgs4   = { param($h,$n) "-4 -i 64 -w 5000 -n $n $h" }
-    PingArgs6   = { param($h,$n) "-6 -i 64 -w 5000 -n $n $h" }
-    TracertArgs = { param($ipVer,$h) "$ipVer -d -h 64 -w 5000 $h" }
-    PathpingArgs= { param($ipVer,$h) "$ipVer /q $($PathpingProbes) /w 5000 $h" }
+    PingArgs4   = { param($h,$n) @('-4','-i','64','-w','5000','-n',"$n",$h) }
+    PingArgs6   = { param($h,$n) @('-6','-i','64','-w','5000','-n',"$n",$h) }
+    TracertArgs = { param($ipVer,$h) @($ipVer,'-d','-h','64','-w','5000',$h) }
+    PathpingArgs= { param($ipVer,$h) @($ipVer,'/q',"$PathpingProbes",'/w','5000',$h) }
   }
 )
 
@@ -124,8 +124,8 @@ function Invoke-PingRaw {
     [Parameter(Mandatory)][scriptblock]$ArgBuilder6
   )
   $args = if ($Protocol -eq 'IPv6') { & $ArgBuilder6 $Host $Count } else { & $ArgBuilder4 $Host $Count }
-  $cmd  = "ping $args"
-  return (cmd /c $cmd)
+  if ($args -isnot [System.Array]) { $args = @($args) }
+  return (ping @args)
 }
 
 # Run Windows tracert with supplied arguments (DNS disabled by -d for speed); returns raw console text
@@ -137,8 +137,8 @@ function Invoke-TracertRaw {
   )
   $sw   = Get-ToolIpSwitch -Protocol $Protocol
   $args = & $ArgBuilder $($sw.Tracert) $Host
-  $cmd  = "tracert $args"
-  return (cmd /c $cmd)
+  if ($args -isnot [System.Array]) { $args = @($args) }
+  return (tracert @args)
 }
 
 # Run pathping (hop-by-hop loss/latency); returns raw console text
@@ -150,8 +150,8 @@ function Invoke-PathpingRaw {
   )
   $sw   = Get-ToolIpSwitch -Protocol $Protocol
   $args = & $ArgBuilder $($sw.Pathping) $Host
-  $cmd  = "pathping $args"
-  return (cmd /c $cmd)
+  if ($args -isnot [System.Array]) { $args = @($args) }
+  return (pathping @args)
 }
 
 # TCP probe with Test-NetConnection (returns object with success/trace)

@@ -8,14 +8,18 @@ An advanced, automated MTR-based network path testing suite with JSON logging, D
 2. [Features](#features)  
 3. [Prerequisites](#prerequisites)  
 4. [Installation](#installation)  
-5. [Usage](#usage)  
-6. [Configuration](#configuration)  
-7. [Logging & Output](#logging--output)  
-8. [Advanced Integration](#advanced-integration)  
-9. [Changelog](#changelog)  
-10. [Development / Validation](#development--validation)  
-11. [Contributing](#contributing)  
-12. [License](#license)
+5. [Quickstart](#quickstart)  
+6. [Usage](#usage)  
+7. [Configuration](#configuration)  
+8. [Logging & Output](#logging--output)  
+9. [Advanced Integration](#advanced-integration)  
+10. [Development](#development)  
+11. [Testing](#testing)  
+12. [Security](#security)  
+13. [Troubleshooting](#troubleshooting)  
+14. [Changelog](#changelog)  
+15. [Contributing](#contributing)  
+16. [License](#license)
 
 ## Overview
 
@@ -53,6 +57,8 @@ Estimated runtime with defaults (~280 runs × 5 min each ≈ 24 hours).
 
 ## Prerequisites
 
+### Linux/macOS (Bash suite)
+
 - **Bash** (v4.x+ required to run the full suite)  
 - **MTR** (with `--json`, MPLS, AS‑lookup support)  
 - **jq**  
@@ -76,6 +82,11 @@ brew install bash mtr jq
 ```
 Note: macOS ships Bash 3.2 by default; the suite requires Bash 4+.
 
+### Windows (PowerShell suite)
+
+- PowerShell 5.1+
+- Built-in tools: `ping`, `tracert`, `pathping`, `Test-NetConnection`
+
 ## Installation
 
 ```bash
@@ -84,7 +95,22 @@ cd mtr-test-suite
 chmod +x mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
 ```
 
+## Quickstart
+
+Linux/macOS:
+```bash
+./mtr-test-suite.sh --dry-run --no-summary
+./mtr-test-suite.sh
+```
+
+Windows:
+```powershell
+powershell -ExecutionPolicy Bypass -File .\NetTestSuite.ps1
+```
+
 ## Usage
+
+### Linux/macOS (Bash suite)
 
 ```bash
 ./mtr-test-suite.sh
@@ -127,6 +153,16 @@ To follow the human-readable summaries in real time:
 ```bash
 tail -f ~/logs/mtr_summary_*.log
 ```
+
+### Windows (PowerShell suite)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\NetTestSuite.ps1
+```
+
+Outputs:
+- JSON: `%USERPROFILE%\logs\net_results_<timestamp>.json`
+- CSV:  `%USERPROFILE%\logs\net_summary_<timestamp>.csv`
 
 ## Configuration
 
@@ -184,11 +220,7 @@ jq '.report.hubs[] | {hop: .count, loss: ."Loss%", avg: .Avg}' ~/logs/*.json.log
 - **Time‑Series DB**: convert JSON to InfluxDB/Prometheus format  
 - **Geo/ASN Enrichment**: add `geoiplookup`/`whois` in `summarize_json()`
 
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md).
-
-## Development / Validation
+## Development
 
 ```bash
 make validate
@@ -196,6 +228,39 @@ make validate
 shfmt -w -i 2 -ci mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
 shellcheck -x mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
 ```
+
+See `docs/RUNBOOK.md` for the full command matrix.
+
+## Testing
+
+Fast smoke test (no network probes):
+```bash
+./mtr-test-suite.sh --dry-run --no-summary
+```
+
+Full suite (long-running):
+```bash
+./mtr-test-suite.sh
+```
+
+## Security
+
+Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md).
+
+Notes:
+- Running probes may require elevated privileges or `cap_net_raw`.
+- Do not include secrets in logs or issue reports.
+
+## Troubleshooting
+
+- `Bash 4+ required` → install a newer bash and run `bash ./mtr-test-suite.sh`.
+- `Missing dependency: mtr` → install `mtr` and ensure it supports `--json`.
+- `column: command not found` → install `util-linux` (Linux) or `column` via Homebrew.
+- Permission errors → run with `sudo` or set `cap_net_raw` for `mtr`.
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 

@@ -129,8 +129,10 @@ main() {
 
   require_bash4
 
-  require_cmd mtr
-  if ((do_summary)); then
+  if ((dry_run == 0)); then
+    require_cmd mtr
+  fi
+  if ((do_summary)) && ((dry_run == 0)); then
     require_cmd jq
     require_cmd column
   fi

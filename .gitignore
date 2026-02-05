@@ -1,3 +1,39 @@
-*.log
+# Suite outputs (when log dir is repo)
 logs/
+mtr_results_*.json.log
+mtr_summary_*.log
+net_results_*.json
+net_summary_*.csv
+
+# Logs
+*.log
+
+# Temp
+tmp/
+_tmp/
+.tmp/
+*.tmp
+
+# OS/editor artifacts
 .DS_Store
+._*
+Thumbs.db
+*.swp
+*.swo
+*~
+*.bak
+.idea/
+.vscode/
+.history/
+
+# Local docs (findings/logs/decisions)
+DECISIONS.md
+FINDINGS.md
+LOG.md
+REFACTOR_PLAN.md
+PHYSICS_AUDIT.md
+validation.md
+
+# Env files
+.env
+.env.*
