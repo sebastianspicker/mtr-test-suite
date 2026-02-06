@@ -73,13 +73,16 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
 
       - name: Gitleaks secret scan
         uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
-        with:
-          args: --no-git --redact
+        env:
+          GITLEAKS_ENABLE_COMMENTS: "false"
 
   dependency_review:
     name: Dependency review (PR only)

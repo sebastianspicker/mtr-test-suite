@@ -35,5 +35,5 @@ No failed runs were found for this workflow.
 | Workflow | Failure(s) | Root Cause | Fix Plan | Status | Risiko | Wie verifizieren |
 |---|---|---|---|---|---|---|
 | ci / lint | None observed | Risk of nondeterministic tool versions and slow installs via `apt-get` | Pin tool versions, cache `.ci-tools`, add timeouts and artifacts | Fixed (pending CI rerun) | Low | Rerun CI on PR and push; verify tools versions in logs |
-| ci / secret_scan | None observed | Potential for long scans on future repo growth | Keep gitleaks default limits; monitor runtime | Fixed | Low | Observe job duration on future runs |
+| ci / secret_scan | Gitleaks failed on push: ambiguous revision range | Checkout was shallow, so base commit for range scan not available | Fetch full history; disable PR comments; grant `pull-requests: read` | Fixed (pending CI rerun) | Low | Rerun CI on push/PR; gitleaks should scan without git errors |
 | ci / dependency_review | None observed | PR-only job; depends on GitHub API availability | Keep minimal permissions; rerun on PR | Fixed (PR-needed) | Low | Verify on a test PR |
