@@ -32,8 +32,8 @@ No failed runs were found for this workflow.
 
 ## Root-Cause & Fix Plan
 
-| Workflow | Failure(s) | Root Cause | Fix Plan | Risiko | Wie verifizieren |
-|---|---|---|---|---|---|
-| ci / lint | None observed | Risk of nondeterministic tool versions and slow installs via `apt-get` | Pin tool versions, cache `.ci-tools`, add timeouts and artifacts | Low | Rerun CI on PR and push; verify tools versions in logs |
-| ci / secret_scan | None observed | Potential for long scans on future repo growth | Keep gitleaks default limits; monitor runtime | Low | Observe job duration on future runs |
-| ci / dependency_review | None observed | PR-only job; depends on GitHub API availability | Keep minimal permissions; rerun on PR | Low | Verify on a test PR |
+| Workflow | Failure(s) | Root Cause | Fix Plan | Status | Risiko | Wie verifizieren |
+|---|---|---|---|---|---|---|
+| ci / lint | None observed | Risk of nondeterministic tool versions and slow installs via `apt-get` | Pin tool versions, cache `.ci-tools`, add timeouts and artifacts | Fixed (pending CI rerun) | Low | Rerun CI on PR and push; verify tools versions in logs |
+| ci / secret_scan | None observed | Potential for long scans on future repo growth | Keep gitleaks default limits; monitor runtime | Fixed | Low | Observe job duration on future runs |
+| ci / dependency_review | None observed | PR-only job; depends on GitHub API availability | Keep minimal permissions; rerun on PR | Fixed (PR-needed) | Low | Verify on a test PR |
