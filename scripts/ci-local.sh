@@ -29,7 +29,7 @@ while [[ $# -gt 0 ]]; do
       SKIP_INSTALL=1
       shift
       ;;
-    -h|--help)
+    -h | --help)
       usage
       exit 0
       ;;
@@ -63,10 +63,42 @@ if ! command -v shfmt >/dev/null 2>&1; then
   exit 1
 fi
 
+find_bash4() {
+  local candidate
+  for candidate in bash /opt/homebrew/bin/bash /usr/local/bin/bash; do
+    if [[ "$candidate" == "bash" ]]; then
+      if command -v bash >/dev/null 2>&1; then
+        local major
+        major=$(bash -c "echo \${BASH_VERSINFO[0]}" 2>/dev/null || echo 0)
+        if [[ "$major" -ge 4 ]]; then
+          echo "bash"
+          return 0
+        fi
+      fi
+    else
+      if [[ -x "$candidate" ]]; then
+        local major
+        major=$("$candidate" -c "echo \${BASH_VERSINFO[0]}" 2>/dev/null || echo 0)
+        if [[ "$major" -ge 4 ]]; then
+          echo "$candidate"
+          return 0
+        fi
+      fi
+    fi
+  done
+  return 1
+}
+
 cd "$ROOT_DIR"
 
 make validate
-./mtr-test-suite.sh --dry-run --no-summary
+
+if BASH_BIN=$(find_bash4); then
+  "$BASH_BIN" ./mtr-test-suite.sh --dry-run --no-summary
+else
+  echo "ERROR: Bash 4+ required for mtr-test-suite.sh. Install newer bash (e.g., brew install bash)." >&2
+  exit 1
+fi
 
 if [[ "$SKIP_PWSH" -eq 1 ]]; then
   echo "Skipping PowerShell static analysis"

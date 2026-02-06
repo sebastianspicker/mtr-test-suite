@@ -21,6 +21,7 @@ Tooling notes:
 - On Linux, `scripts/ci-install-tools.sh` downloads pinned `shellcheck` and `shfmt` into `.ci-tools/`.
 - On macOS, install via Homebrew: `brew install shellcheck shfmt`.
 - On Windows, use `choco install shellcheck shfmt` or run CI in WSL.
+- `mtr-test-suite.sh` requires Bash 4+. On macOS, install via `brew install bash` and ensure it is in your PATH.
 
 ## Checks
 - Shell validation: `shfmt` and `shellcheck` via `make validate`.
