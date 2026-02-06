@@ -4,6 +4,7 @@ mtr_results_*.json.log
 mtr_summary_*.log
 net_results_*.json
 net_summary_*.csv
+ci-artifacts/
 
 # Logs
 *.log
@@ -37,3 +38,19 @@ validation.md
 # Env files
 .env
 .env.*
+
+# CI/tooling caches
+.ci-tools/
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.terraform/
+coverage/
+.coverage
+junit.xml
+junit-*.xml
+test-results/
+node_modules/
+dist/
+build/
