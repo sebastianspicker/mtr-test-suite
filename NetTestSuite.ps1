@@ -114,7 +114,7 @@ function Get-ToolIpSwitch {
   }
 }
 
-# Run Windows ping with supplied arguments; returns raw console text
+# Run Windows ping with supplied arguments; returns object with Raw (console text) and ExitCode
 function Invoke-PingRaw {
   param(
     [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
@@ -125,10 +125,11 @@ function Invoke-PingRaw {
   )
   $args = if ($Protocol -eq 'IPv6') { & $ArgBuilder6 $Host $Count } else { & $ArgBuilder4 $Host $Count }
   if ($args -isnot [System.Array]) { $args = @($args) }
-  return (ping @args)
+  $raw = ping @args
+  [pscustomobject]@{ Raw = $raw; ExitCode = $LASTEXITCODE }
 }
 
-# Run Windows tracert with supplied arguments (DNS disabled by -d for speed); returns raw console text
+# Run Windows tracert with supplied arguments (DNS disabled by -d for speed); returns object with Raw and ExitCode
 function Invoke-TracertRaw {
   param(
     [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
@@ -138,10 +139,11 @@ function Invoke-TracertRaw {
   $sw   = Get-ToolIpSwitch -Protocol $Protocol
   $args = & $ArgBuilder $($sw.Tracert) $Host
   if ($args -isnot [System.Array]) { $args = @($args) }
-  return (tracert @args)
+  $raw = tracert @args
+  [pscustomobject]@{ Raw = $raw; ExitCode = $LASTEXITCODE }
 }
 
-# Run pathping (hop-by-hop loss/latency); returns raw console text
+# Run pathping (hop-by-hop loss/latency); returns object with Raw and ExitCode
 function Invoke-PathpingRaw {
   param(
     [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
@@ -151,7 +153,8 @@ function Invoke-PathpingRaw {
   $sw   = Get-ToolIpSwitch -Protocol $Protocol
   $args = & $ArgBuilder $($sw.Pathping) $Host
   if ($args -isnot [System.Array]) { $args = @($args) }
-  return (pathping @args)
+  $raw = pathping @args
+  [pscustomobject]@{ Raw = $raw; ExitCode = $LASTEXITCODE }
 }
 
 # TCP probe with Test-NetConnection (returns object with success/trace)
@@ -165,10 +168,12 @@ function Test-TcpPort {
 }
 
 # Best-effort UDP probe: attempt to send a zero-byte datagram and detect "ICMP Port Unreachable" quickly.
+# Protocol restricts resolution and socket to IPv4 or IPv6 so results match the current round.
 function Test-UdpPortBestEffort {
   param(
     [Parameter(Mandatory)][string]$Host,
     [Parameter(Mandatory)][int]$Port,
+    [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
     [int]$TimeoutMs = 2000
   )
 
@@ -182,9 +187,16 @@ function Test-UdpPortBestEffort {
   }
 
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  $udp = $null
   try {
-    $addr = [System.Net.Dns]::GetHostAddresses($Host) | Select-Object -First 1
-    $udp  = [System.Net.Sockets.UdpClient]::new()
+    $family = if ($Protocol -eq 'IPv6') { [System.Net.Sockets.AddressFamily]::InterNetworkV6 } else { [System.Net.Sockets.AddressFamily]::InterNetwork }
+    $addrs = [System.Net.Dns]::GetHostAddresses($Host) | Where-Object { $_.AddressFamily -eq $family }
+    $addr = $addrs | Select-Object -First 1
+    if (-not $addr) {
+      $result.Detail = "No $Protocol address for $Host"
+      return [pscustomobject]$result
+    }
+    $udp = [System.Net.Sockets.UdpClient]::new($family)
     $udp.Client.ReceiveTimeout = $TimeoutMs
     $udp.Connect($addr, $Port)
 
@@ -203,14 +215,15 @@ function Test-UdpPortBestEffort {
         default { $result.Status = 'Likely filtered';       $result.Detail = "Socket error $($_.Exception.ErrorCode)" }
       }
     }
-
-    $udp.Close()
   }
   catch {
     $result.Status = 'Error'
     $result.Detail = $_.Exception.Message
   }
   finally {
+    if ($udp) {
+      try { $udp.Close() } catch { }
+    }
     $sw.Stop()
     $result.DurationMs = [int]$sw.Elapsed.TotalMilliseconds
   }
@@ -233,13 +246,13 @@ foreach ($round in $Rounds) {
       Write-Host "[$($round.Name)] [$proto] → $h" -ForegroundColor Yellow
 
       # ICMP ping (single correct call per protocol)
-      $pingRaw = Invoke-PingRaw -Protocol $proto -Host $h -Count $PingCount -ArgBuilder4 $round.PingArgs4 -ArgBuilder6 $round.PingArgs6
+      $pingResult = Invoke-PingRaw -Protocol $proto -Host $h -Count $PingCount -ArgBuilder4 $round.PingArgs4 -ArgBuilder6 $round.PingArgs6
 
       # Traceroute (DNS disabled for speed)
-      $trRaw = Invoke-TracertRaw -Protocol $proto -Host $h -ArgBuilder $round.TracertArgs
+      $trResult = Invoke-TracertRaw -Protocol $proto -Host $h -ArgBuilder $round.TracertArgs
 
       # Pathping (hop-by-hop loss/latency)
-      $ppRaw = Invoke-PathpingRaw -Protocol $proto -Host $h -ArgBuilder $round.PathpingArgs
+      $ppResult = Invoke-PathpingRaw -Protocol $proto -Host $h -ArgBuilder $round.PathpingArgs
 
       # TCP 443 test with optional route trace
       $tnc = Test-TcpPort -Host $h -Port 443 -Hops 20
@@ -256,7 +269,7 @@ foreach ($round in $Rounds) {
             Note     = 'Test-NetConnection'
           }
         } else {
-          $udp = Test-UdpPortBestEffort -Host $h -Port $t.Port -TimeoutMs 2000
+          $udp = Test-UdpPortBestEffort -Host $h -Port $t.Port -Protocol $proto -TimeoutMs 2000
           [pscustomobject]@{
             Name     = $t.Name
             Protocol = 'UDP'
@@ -269,16 +282,19 @@ foreach ($round in $Rounds) {
 
       # Build a structured object per host/round/protocol
       $obj = [pscustomobject]@{
-        Timestamp   = (Get-Date).ToString('o')
-        Round       = $round.Name
-        Protocol    = $proto
-        Host        = $h
-        PingRaw     = $pingRaw
-        TracertRaw  = $trRaw
-        PathpingRaw = $ppRaw
-        Tcp443OK    = [bool]$tnc.TcpTestSucceeded
-        TraceRoute  = $tnc.TraceRoute
-        Ports       = $portFindings
+        Timestamp    = (Get-Date).ToString('o')
+        Round        = $round.Name
+        Protocol     = $proto
+        Host         = $h
+        PingRaw      = $pingResult.Raw
+        PingOk       = ($pingResult.ExitCode -eq 0)
+        TracertRaw   = $trResult.Raw
+        TracertOk    = ($trResult.ExitCode -eq 0)
+        PathpingRaw  = $ppResult.Raw
+        PathpingOk   = ($ppResult.ExitCode -eq 0)
+        Tcp443OK     = [bool]$tnc.TcpTestSucceeded
+        TraceRoute   = $tnc.TraceRoute
+        Ports        = $portFindings
       }
 
       $all.Add($obj)
@@ -292,9 +308,10 @@ foreach ($round in $Rounds) {
 
 # Persist artifacts (JSON for details, CSV for quick diff)
 $all | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path $jsonPath
-$all |
-  Select-Object Timestamp,Round,Protocol,Host,Tcp443OK |
-  Export-Csv -NoTypeInformation -Encoding UTF8 -Path $csvPath
+$csvContent = ($all |
+  Select-Object Timestamp,Round,Protocol,Host,PingOk,TracertOk,PathpingOk,Tcp443OK |
+  ConvertTo-Csv -NoTypeInformation)
+[System.IO.File]::WriteAllText($csvPath, $csvContent, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host "Diagnostics complete." -ForegroundColor Cyan
 Write-Host "JSON: $jsonPath"

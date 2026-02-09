@@ -51,15 +51,15 @@ summarize_json() {
   local f=$1
   local dst_name dst_ip
 
-  dst_name=$(jq -r '.report.dst_name? // .report.dst_addr? // .report.dst_ip? // .report.mtr.dst? // "???"' "$f")
-  dst_ip=$(jq -r '.report.dst_addr? // .report.dst_ip? // .report.mtr.dst? // "???"' "$f")
+  dst_name=$(jq -r '(.report // {} | .dst_name? // .dst_addr? // .dst_ip? // .mtr.dst?) // "???"' "$f" 2>/dev/null) || echo "???"
+  dst_ip=$(jq -r '(.report // {} | .dst_addr? // .dst_ip? // .mtr.dst?) // "???"' "$f" 2>/dev/null) || echo "???"
 
   {
     echo
     echo "Results for: ${dst_name} (${dst_ip})"
     printf 'Hop\tHost\tIP\tLoss%%\tSnt\tLast\tAvg\tBest\tWrst\tStDev\n'
     jq -r '
-      .report.hubs[]? as $h |
+      ((.report // {}) | .hubs // [])[]? as $h |
       [
         ($h.count // 0),
         ( $h.host // "???" | sub(" \\(.*"; "") ),
@@ -71,7 +71,7 @@ summarize_json() {
         ($h.Best    // 0),
         ($h.Wrst    // 0),
         ($h.StDev   // 0)
-      ] | map(tostring) | @tsv' "$f" | column -t -s $'\t'
+      ] | map(tostring) | @tsv' "$f" 2>/dev/null | column -t -s $'\t'
     echo
   } | tee -a "$TABLE_LOG"
 }
@@ -147,48 +147,38 @@ main() {
   : >"$JSON_LOG"
   : >"$TABLE_LOG"
 
-  trap 'log "Interrupted"; exit 130' INT TERM
+  CURRENT_TMP=""
+  trap 'rm -f "$CURRENT_TMP" 2>/dev/null; log "Interrupted"; exit 130' INT TERM
 
-  # Test definitions
-  declare -A TESTS=(
-    [ICMP4]="-4 -b -i 1 -c 300 -r --json"
-    [ICMP6]="-6 -b -i 1 -c 300 -r --json"
-    [UDP4]="-u -4 -b -i 1 -c 300 -r --json"
-    [UDP6]="-u -6 -b -i 1 -c 300 -r --json"
-    [TCP4]="-T -P 443 -4 -b -i 1 -c 300 -r --json"
-    [TCP6]="-T -P 443 -6 -b -i 1 -c 300 -r --json"
-    [MPLS4]="-e -4 -b -i 1 -c 300 -r --json"
-    [MPLS6]="-e -6 -b -i 1 -c 300 -r --json"
-    [AS4]="-z --aslookup -4 -b -i 1 -c 300 -r --json"
-    [AS6]="-z --aslookup -6 -b -i 1 -c 300 -r --json"
-  )
+  # Test definitions (arrays built in loop to avoid fragile read -a parsing)
   TEST_ORDER=(ICMP4 ICMP6 UDP4 UDP6 TCP4 TCP6 MPLS4 MPLS6 AS4 AS6)
 
   HOSTS_IPV4=(netcologne.de google.com wikipedia.org amazon.de)
   HOSTS_IPV6=(netcologne.de google.com wikipedia.org)
 
-  declare -A ROUNDS=(
-    [Standard]=""
-    [MTU1400]="-s 1400"
-    [TOS_CS5]="--tos 160"
-    [TOS_AF11]="--tos 40"
-    [TTL10]="-m 10"
-    [TTL64]="-m 64"
-    [FirstTTL3]="-f 3"
-    [Timeout5]="-Z 5"
-  )
   ROUND_ORDER=(Standard MTU1400 TOS_CS5 TOS_AF11 TTL10 TTL64 FirstTTL3 Timeout5)
 
   log "Starting MTR tests (rounds: ${ROUND_ORDER[*]})"
   log "JSON_LOG=$JSON_LOG"
   log "TABLE_LOG=$TABLE_LOG"
 
-  local round extra type host tmp
+  local round type host tmp
   local -a hosts mtr_args extra_args
 
   for round in "${ROUND_ORDER[@]}"; do
-    extra=${ROUNDS[$round]}
-    log "=== Round: $round ${extra:+(opts: $extra)} ==="
+    # Build round extra args once per round
+    case "$round" in
+      Standard) extra_args=() ;;
+      MTU1400) extra_args=(-s 1400) ;;
+      TOS_CS5) extra_args=(--tos 160) ;;
+      TOS_AF11) extra_args=(--tos 40) ;;
+      TTL10) extra_args=(-m 10) ;;
+      TTL64) extra_args=(-m 64) ;;
+      FirstTTL3) extra_args=(-f 3) ;;
+      Timeout5) extra_args=(-Z 5) ;;
+      *) extra_args=() ;;
+    esac
+    log "=== Round: $round ${extra_args[*]:+(opts: ${extra_args[*]})} ==="
 
     for type in "${TEST_ORDER[@]}"; do
       log "--- $type tests in Round: $round ---"
@@ -199,41 +189,46 @@ main() {
         hosts=("${HOSTS_IPV4[@]}")
       fi
 
+      # Build mtr base args per type (robust array, no word-splitting)
+      case "$type" in
+        ICMP4) mtr_args=(-4 -b -i 1 -c 300 -r --json) ;;
+        ICMP6) mtr_args=(-6 -b -i 1 -c 300 -r --json) ;;
+        UDP4) mtr_args=(-u -4 -b -i 1 -c 300 -r --json) ;;
+        UDP6) mtr_args=(-u -6 -b -i 1 -c 300 -r --json) ;;
+        TCP4) mtr_args=(-T -P 443 -4 -b -i 1 -c 300 -r --json) ;;
+        TCP6) mtr_args=(-T -P 443 -6 -b -i 1 -c 300 -r --json) ;;
+        MPLS4) mtr_args=(-e -4 -b -i 1 -c 300 -r --json) ;;
+        MPLS6) mtr_args=(-e -6 -b -i 1 -c 300 -r --json) ;;
+        AS4) mtr_args=(-z --aslookup -4 -b -i 1 -c 300 -r --json) ;;
+        AS6) mtr_args=(-z --aslookup -6 -b -i 1 -c 300 -r --json) ;;
+        *) die "Unknown test type: $type" ;;
+      esac
+
       for host in "${hosts[@]}"; do
         log "-> $type -> $host"
 
         if ((dry_run)); then
-          log "DRY RUN: mtr ${TESTS[$type]} ${extra:+$extra} $host"
+          log "DRY RUN: mtr ${mtr_args[*]} ${extra_args[*]} $host"
           continue
         fi
 
         tmp=$(mktemp "${TMPDIR:-/tmp}/mtr-suite.XXXXXXXX")
-        if ! read -r -a mtr_args <<<"${TESTS[$type]}"; then
-          rm -f "$tmp"
-          die "Failed to parse test args for $type"
-        fi
-        extra_args=()
-        if [[ -n ${extra} ]]; then
-          if ! read -r -a extra_args <<<"${extra}"; then
-            rm -f "$tmp"
-            die "Failed to parse round args for $round"
-          fi
-        fi
+        CURRENT_TMP=$tmp
 
-        if ! mtr "${mtr_args[@]}" "${extra_args[@]}" "$host" >"$tmp" 2>>"$TABLE_LOG"; then
+        if mtr "${mtr_args[@]}" "${extra_args[@]}" "$host" >"$tmp" 2>>"$TABLE_LOG"; then
+          cat "$tmp" >>"$JSON_LOG"
+          printf '\n' >>"$JSON_LOG"
+          if ((do_summary)); then
+            if ! summarize_json "$tmp"; then
+              log "WARN: summary failed for $type -> $host (continuing)"
+            fi
+          fi
+        else
           log "WARN: error in $type -> $host (continuing)"
         fi
 
-        cat "$tmp" >>"$JSON_LOG"
-        printf '\n' >>"$JSON_LOG"
-
-        if ((do_summary)); then
-          if ! summarize_json "$tmp"; then
-            log "WARN: summary failed for $type -> $host (continuing)"
-          fi
-        fi
-
         rm -f "$tmp"
+        CURRENT_TMP=""
         log "OK: completed $type -> $host"
       done
     done

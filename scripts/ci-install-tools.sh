@@ -48,15 +48,21 @@ install_shellcheck() {
   echo "Installing shellcheck v${SHELLCHECK_VERSION}"
   local tmpdir
   tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' RETURN
 
   local archive="$tmpdir/shellcheck.tar.xz"
   curl -sSL -o "$archive" "$SHELLCHECK_URL"
   sha256_check "$archive" "$SHELLCHECK_SHA256"
 
   tar -xJf "$archive" -C "$tmpdir"
-  mv "$tmpdir/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" "$bin"
+  local found
+  found=$(find "$tmpdir" -type f -name shellcheck 2>/dev/null | head -1)
+  [[ -n "$found" ]] || {
+    echo "ERROR: shellcheck binary not found in archive" >&2
+    return 1
+  }
+  mv "$found" "$bin"
   chmod +x "$bin"
-  rm -rf "$tmpdir"
 }
 
 install_shfmt() {
@@ -71,6 +77,7 @@ install_shfmt() {
   echo "Installing shfmt v${SHFMT_VERSION}"
   local tmpdir
   tmpdir=$(mktemp -d)
+  trap 'rm -rf "$tmpdir"' RETURN
 
   local target="$tmpdir/shfmt"
   curl -sSL -o "$target" "$SHFMT_URL"
@@ -78,7 +85,6 @@ install_shfmt() {
 
   mv "$target" "$bin"
   chmod +x "$bin"
-  rm -rf "$tmpdir"
 }
 
 install_shellcheck
