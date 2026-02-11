@@ -26,6 +26,7 @@ Thumbs.db
 .idea/
 .vscode/
 .history/
+.codex/
 
 # Local docs (findings/logs/decisions)
 DECISIONS.md
