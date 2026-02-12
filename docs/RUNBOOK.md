@@ -58,7 +58,13 @@ None (scripts only).
 
 ```bash
 make validate
-./mtr-test-suite.sh --dry-run
+./mtr-test-suite.sh --dry-run --no-summary
+```
+
+Optional: run the same checks as CI locally (Linux; use `--skip-pwsh` if PowerShell is not available):
+
+```bash
+scripts/ci-local.sh
 ```
 
 ### Full loop (long-running)

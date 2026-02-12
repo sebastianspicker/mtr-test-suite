@@ -13,13 +13,15 @@ An advanced, automated MTR-based network path testing suite with JSON logging, D
 7. [Configuration](#configuration)  
 8. [Logging & Output](#logging--output)  
 9. [Advanced Integration](#advanced-integration)  
-10. [Development](#development)  
-11. [Testing](#testing)  
-12. [Security](#security)  
-13. [Troubleshooting](#troubleshooting)  
-14. [Changelog](#changelog)  
-15. [Contributing](#contributing)  
-16. [License](#license)
+10. [Validation (build / run / test)](#validation-build--run--test)  
+11. [Development](#development)  
+12. [Testing](#testing)  
+13. [Security](#security)  
+14. [Known issues](#known-issues)  
+15. [Troubleshooting](#troubleshooting)  
+16. [Changelog](#changelog)  
+17. [Contributing](#contributing)  
+18. [License](#license)
 
 ## Overview
 
@@ -90,7 +92,7 @@ Note: macOS ships Bash 3.2 by default; the suite requires Bash 4+.
 ## Installation
 
 ```bash
-git clone https://github.com/<your-org>/mtr-test-suite.git
+git clone <this-repo-url>
 cd mtr-test-suite
 chmod +x mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
 ```
@@ -174,34 +176,9 @@ HOSTS_IPV4=( netcologne.de google.com wikipedia.org amazon.de )
 HOSTS_IPV6=( netcologne.de google.com wikipedia.org )
 ```
 
-### Test Types
+### Test Types and Rounds
 
-Adjust or extend the `TESTS` mapping in `mtr-test-suite.sh`:
-```bash
-declare -A TESTS=(
-  [ICMP4]="-4 -b ...",
-  [UDP4] ="-u -4 -b ...",
-  [MPLS4]="-e -4 ...",
-  [AS4]  ="-z --aslookup -4 ...",
-  …
-)
-```
-
-### Rounds
-
-Modify the `ROUNDS` array in `mtr-test-suite.sh`:
-```bash
-declare -A ROUNDS=(
-  [Standard]="",
-  [MTU1400]="-s 1400",
-  [TOS_CS5]="--tos 160",
-  [TOS_AF11]="--tos 40",
-  [TTL10]="-m 10",
-  [TTL64]="-m 64",
-  [FirstTTL3]="-f 3",
-  [Timeout5]="-Z 5",
-)
-```
+The script uses `TEST_ORDER` and `ROUND_ORDER` arrays plus `case` blocks for test/round arguments. Edit `mtr-test-suite.sh` to change test types (e.g. ICMP4, UDP4, TCP4, MPLS4, AS4 and IPv6 variants) and rounds (Standard, MTU1400, TOS_CS5, TOS_AF11, TTL10, TTL64, FirstTTL3, Timeout5).
 
 ## Logging & Output
 
@@ -220,16 +197,27 @@ jq '.report.hubs[] | {hop: .count, loss: ."Loss%", avg: .Avg}' ~/logs/*.json.log
 - **Time‑Series DB**: convert JSON to InfluxDB/Prometheus format  
 - **Geo/ASN Enrichment**: add `geoiplookup`/`whois` in `summarize_json()`
 
+## Validation (build / run / test)
+
+| Action | Command |
+|--------|---------|
+| **Lint & format check** | `make validate` |
+| **Format scripts** | `make fmt` |
+| **Lint only** | `make lint` |
+| **Smoke test (no network)** | `./mtr-test-suite.sh --dry-run --no-summary` |
+| **Full Bash suite** | `./mtr-test-suite.sh` |
+| **Windows suite** | `powershell -ExecutionPolicy Bypass -File .\NetTestSuite.ps1` |
+| **Local CI-style checks** | `scripts/ci-local.sh` (optional; use `--skip-pwsh` if PowerShell unavailable) |
+
+See [docs/RUNBOOK.md](docs/RUNBOOK.md) for setup and full command matrix.
+
 ## Development
 
 ```bash
 make validate
-
-shfmt -w -i 2 -ci mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
-shellcheck -x mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
+make fmt    # format
+make lint   # lint only
 ```
-
-See `docs/RUNBOOK.md` for the full command matrix.
 
 ## Testing
 
@@ -250,6 +238,10 @@ Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md).
 Notes:
 - Running probes may require elevated privileges or `cap_net_raw`.
 - Do not include secrets in logs or issue reports.
+
+## Known issues
+
+Known bugs and required fixes are listed in [docs/BUGS_AND_FIXES.md](docs/BUGS_AND_FIXES.md). Use that document for issue creation and troubleshooting reference.
 
 ## Troubleshooting
 
