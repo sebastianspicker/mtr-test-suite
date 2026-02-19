@@ -92,9 +92,9 @@ Note: macOS ships Bash 3.2 by default; the suite requires Bash 4+.
 ## Installation
 
 ```bash
-git clone <this-repo-url>
+git clone <this-repository-url>
 cd mtr-test-suite
-chmod +x mtr-test-suite.sh mtr-tests-enhanced.sh mtr-test-suite_min-comments.sh
+chmod +x mtr-test-suite.sh
 ```
 
 ## Quickstart
@@ -120,12 +120,6 @@ powershell -ExecutionPolicy Bypass -File .\NetTestSuite.ps1
 
 Note: depending on how `mtr` is installed on your system, some probe types may require elevated privileges (e.g. `sudo`) or `cap_net_raw`.
 
-Wrappers:
-- `mtr-tests-enhanced.sh` (legacy entrypoint)
-- `mtr-test-suite_min-comments.sh` (legacy/minimal header)
-
-Both wrappers exec the canonical `mtr-test-suite.sh`.
-
 Abort anytime with **Ctrl+C**; partial results remain saved.
 
 ### Options
@@ -135,7 +129,8 @@ Abort anytime with **Ctrl+C**; partial results remain saved.
 ./mtr-test-suite.sh --log-dir /var/log/mtr-suite
 ./mtr-test-suite.sh --json-log ./mtr.json.log --table-log ./mtr.table.log
 ./mtr-test-suite.sh --no-summary     # JSON only (no jq/column)
-./mtr-test-suite.sh --dry-run        # print planned runs
+./mtr-test-suite.sh --dry-run        # print planned runs only (no files created)
+./mtr-test-suite.sh --quiet          # only errors and final summary
 ```
 
 ### Running as a Background Job
@@ -204,7 +199,7 @@ jq '.report.hubs[] | {hop: .count, loss: ."Loss%", avg: .Avg}' ~/logs/*.json.log
 | **Lint & format check** | `make validate` |
 | **Format scripts** | `make fmt` |
 | **Lint only** | `make lint` |
-| **Smoke test (no network)** | `./mtr-test-suite.sh --dry-run --no-summary` |
+| **Smoke test (no network)** | See [docs/RUNBOOK.md](docs/RUNBOOK.md) (canonical: `./mtr-test-suite.sh --dry-run --no-summary`) |
 | **Full Bash suite** | `./mtr-test-suite.sh` |
 | **Windows suite** | `powershell -ExecutionPolicy Bypass -File .\NetTestSuite.ps1` |
 | **Local CI-style checks** | `scripts/ci-local.sh` (optional; use `--skip-pwsh` if PowerShell unavailable) |
@@ -221,10 +216,7 @@ make lint   # lint only
 
 ## Testing
 
-Fast smoke test (no network probes):
-```bash
-./mtr-test-suite.sh --dry-run --no-summary
-```
+Fast smoke test (no network probes): see [docs/RUNBOOK.md](docs/RUNBOOK.md) for the canonical command (`./mtr-test-suite.sh --dry-run --no-summary`).
 
 Full suite (long-running):
 ```bash
@@ -241,7 +233,7 @@ Notes:
 
 ## Known issues
 
-Known bugs and required fixes are listed in [docs/BUGS_AND_FIXES.md](docs/BUGS_AND_FIXES.md). Use that document for issue creation and troubleshooting reference.
+Known bugs and required fixes are listed in [docs/BUGS_AND_FIXES.md](docs/BUGS_AND_FIXES.md). Use that document for issue creation; the [Quick reference: common failure causes](docs/BUGS_AND_FIXES.md#quick-reference-common-failure-causes) table helps with troubleshooting.
 
 ## Troubleshooting
 

@@ -33,7 +33,6 @@ DECISIONS.md
 FINDINGS.md
 LOG.md
 REFACTOR_PLAN.md
-PHYSICS_AUDIT.md
 validation.md
 
 # Env files
@@ -43,15 +42,3 @@ validation.md
 # CI/tooling caches
 .ci-tools/
 .cache/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.terraform/
-coverage/
-.coverage
-junit.xml
-junit-*.xml
-test-results/
-node_modules/
-dist/
-build/

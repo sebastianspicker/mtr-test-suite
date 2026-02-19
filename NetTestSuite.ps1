@@ -13,8 +13,10 @@
 
 .NOTES
   - Requires PowerShell 5.1+; Test-NetConnection usage aligns with Windows Server and current client releases
+  - PingOk, TracertOk, PathpingOk mean "process exit code 0", not "path reachable"; use Raw output for path analysis
   - UDP "reachability" is inherently ambiguous without an application-level response; the probe reports "Likely reachable", "Likely filtered", or "Ambiguous"
   - Run in an elevated PowerShell if QoS/DSCP policies are later added (not required for this script)
+  - Host names must not start with - or / (would be interpreted as options by ping/tracert/pathping)
 
 .LICENSE
   MIT-licensed sample; adapt as needed.
@@ -50,6 +52,10 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# Prevent native commands (ping, tracert, pathping) from throwing on non-zero exit so we can capture ExitCode
+if ($PSVersionTable.PSVersion.Major -ge 7) {
+  $PSNativeCommandUseErrorActionPreference = $false
+}
 
 # Timestamped output files
 $ts       = Get-Date -Format 'yyyyMMdd_HHmmss'
@@ -58,6 +64,19 @@ $csvPath  = Join-Path $LogDirectory "net_summary_$ts.csv"
 
 # Ensure output directory exists
 New-Item -ItemType Directory -Path $LogDirectory -Force | Out-Null
+
+# Reject host names that could be interpreted as options by ping/tracert/pathping
+function Test-HostNameSafe {
+  param([string]$HostName)
+  if ([string]::IsNullOrWhiteSpace($HostName)) { return $false }
+  $trimmed = $HostName.Trim()
+  if ($trimmed.StartsWith('-') -or $trimmed.StartsWith('/')) { return $false }
+  return $true
+}
+$badHosts = @($HostsIPv4 + $HostsIPv6) | Where-Object { -not (Test-HostNameSafe $_) }
+if ($badHosts.Count -gt 0) {
+  throw "Host names must not start with - or /: $($badHosts -join ', ')"
+}
 
 # Define diagnostic "rounds" similar to the MTR concept (vary MTU/DF, TTL, timeouts)
 $Rounds = @(
@@ -118,12 +137,12 @@ function Get-ToolIpSwitch {
 function Invoke-PingRaw {
   param(
     [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
-    [Parameter(Mandatory)][string]$Host,
+    [Parameter(Mandatory)][string]$HostName,
     [Parameter(Mandatory)][int]$Count,
     [Parameter(Mandatory)][scriptblock]$ArgBuilder4,
     [Parameter(Mandatory)][scriptblock]$ArgBuilder6
   )
-  $args = if ($Protocol -eq 'IPv6') { & $ArgBuilder6 $Host $Count } else { & $ArgBuilder4 $Host $Count }
+  $args = if ($Protocol -eq 'IPv6') { & $ArgBuilder6 $HostName $Count } else { & $ArgBuilder4 $HostName $Count }
   if ($args -isnot [System.Array]) { $args = @($args) }
   $raw = ping @args
   [pscustomobject]@{ Raw = $raw; ExitCode = $LASTEXITCODE }
@@ -133,11 +152,11 @@ function Invoke-PingRaw {
 function Invoke-TracertRaw {
   param(
     [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
-    [Parameter(Mandatory)][string]$Host,
+    [Parameter(Mandatory)][string]$HostName,
     [Parameter(Mandatory)][scriptblock]$ArgBuilder
   )
   $sw   = Get-ToolIpSwitch -Protocol $Protocol
-  $args = & $ArgBuilder $($sw.Tracert) $Host
+  $args = & $ArgBuilder $($sw.Tracert) $HostName
   if ($args -isnot [System.Array]) { $args = @($args) }
   $raw = tracert @args
   [pscustomobject]@{ Raw = $raw; ExitCode = $LASTEXITCODE }
@@ -147,38 +166,47 @@ function Invoke-TracertRaw {
 function Invoke-PathpingRaw {
   param(
     [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
-    [Parameter(Mandatory)][string]$Host,
+    [Parameter(Mandatory)][string]$HostName,
     [Parameter(Mandatory)][scriptblock]$ArgBuilder
   )
   $sw   = Get-ToolIpSwitch -Protocol $Protocol
-  $args = & $ArgBuilder $($sw.Pathping) $Host
+  $args = & $ArgBuilder $($sw.Pathping) $HostName
   if ($args -isnot [System.Array]) { $args = @($args) }
   $raw = pathping @args
   [pscustomobject]@{ Raw = $raw; ExitCode = $LASTEXITCODE }
 }
 
-# TCP probe with Test-NetConnection (returns object with success/trace)
+# TCP probe with Test-NetConnection; optionally bind to IPv4 or IPv6 by resolving to that family first
 function Test-TcpPort {
   param(
-    [Parameter(Mandatory)][string]$Host,
+    [Parameter(Mandatory)][string]$HostName,
     [Parameter(Mandatory)][int]$Port,
-    [int]$Hops = 20
+    [int]$Hops = 20,
+    [ValidateSet('IPv4', 'IPv6')]
+    [string]$Protocol = 'IPv4'
   )
-  return (Test-NetConnection -ComputerName $Host -Port $Port -TraceRoute -InformationLevel Detailed -Hops $Hops)
+  $family = if ($Protocol -eq 'IPv6') { [System.Net.Sockets.AddressFamily]::InterNetworkV6 } else { [System.Net.Sockets.AddressFamily]::InterNetwork }
+  $addrs = [System.Net.Dns]::GetHostAddresses($HostName) | Where-Object { $_.AddressFamily -eq $family }
+  $addr = $addrs | Select-Object -First 1
+  if (-not $addr) {
+    return [pscustomobject]@{ TcpTestSucceeded = $false; TraceRoute = $null }
+  }
+  $target = $addr.ToString()
+  return (Test-NetConnection -ComputerName $target -Port $Port -TraceRoute -InformationLevel Detailed -Hops $Hops)
 }
 
 # Best-effort UDP probe: attempt to send a zero-byte datagram and detect "ICMP Port Unreachable" quickly.
 # Protocol restricts resolution and socket to IPv4 or IPv6 so results match the current round.
 function Test-UdpPortBestEffort {
   param(
-    [Parameter(Mandatory)][string]$Host,
+    [Parameter(Mandatory)][string]$HostName,
     [Parameter(Mandatory)][int]$Port,
     [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
     [int]$TimeoutMs = 2000
   )
 
   $result = [ordered]@{
-    Host      = $Host
+    Host      = $HostName
     Port      = $Port
     Protocol  = 'UDP'
     Status    = 'Ambiguous'
@@ -190,10 +218,10 @@ function Test-UdpPortBestEffort {
   $udp = $null
   try {
     $family = if ($Protocol -eq 'IPv6') { [System.Net.Sockets.AddressFamily]::InterNetworkV6 } else { [System.Net.Sockets.AddressFamily]::InterNetwork }
-    $addrs = [System.Net.Dns]::GetHostAddresses($Host) | Where-Object { $_.AddressFamily -eq $family }
+    $addrs = [System.Net.Dns]::GetHostAddresses($HostName) | Where-Object { $_.AddressFamily -eq $family }
     $addr = $addrs | Select-Object -First 1
     if (-not $addr) {
-      $result.Detail = "No $Protocol address for $Host"
+      $result.Detail = "No $Protocol address for $HostName"
       return [pscustomobject]$result
     }
     $udp = [System.Net.Sockets.UdpClient]::new($family)
@@ -243,24 +271,25 @@ foreach ($round in $Rounds) {
     if (-not $hosts -or $hosts.Count -eq 0) { continue }
 
     foreach ($h in $hosts) {
+      if (-not (Test-HostNameSafe $h)) { continue }
       Write-Host "[$($round.Name)] [$proto] → $h" -ForegroundColor Yellow
 
       # ICMP ping (single correct call per protocol)
-      $pingResult = Invoke-PingRaw -Protocol $proto -Host $h -Count $PingCount -ArgBuilder4 $round.PingArgs4 -ArgBuilder6 $round.PingArgs6
+      $pingResult = Invoke-PingRaw -Protocol $proto -HostName $h -Count $PingCount -ArgBuilder4 $round.PingArgs4 -ArgBuilder6 $round.PingArgs6
 
       # Traceroute (DNS disabled for speed)
-      $trResult = Invoke-TracertRaw -Protocol $proto -Host $h -ArgBuilder $round.TracertArgs
+      $trResult = Invoke-TracertRaw -Protocol $proto -HostName $h -ArgBuilder $round.TracertArgs
 
       # Pathping (hop-by-hop loss/latency)
-      $ppResult = Invoke-PathpingRaw -Protocol $proto -Host $h -ArgBuilder $round.PathpingArgs
+      $ppResult = Invoke-PathpingRaw -Protocol $proto -HostName $h -ArgBuilder $round.PathpingArgs
 
-      # TCP 443 test with optional route trace
-      $tnc = Test-TcpPort -Host $h -Port 443 -Hops 20
+      # TCP 443 test bound to this round's protocol (IPv4 or IPv6)
+      $tnc = Test-TcpPort -HostName $h -Port 443 -Hops 20 -Protocol $proto
 
       # UDP/TCP gaming probes (best-effort UDP)
       $portFindings = foreach ($t in $GamingTargets) {
         if ($t.Protocol -eq 'TCP') {
-          $tcp = Test-TcpPort -Host $h -Port $t.Port -Hops 10
+          $tcp = Test-TcpPort -HostName $h -Port $t.Port -Hops 10 -Protocol $proto
           [pscustomobject]@{
             Name     = $t.Name
             Protocol = 'TCP'
@@ -269,7 +298,7 @@ foreach ($round in $Rounds) {
             Note     = 'Test-NetConnection'
           }
         } else {
-          $udp = Test-UdpPortBestEffort -Host $h -Port $t.Port -Protocol $proto -TimeoutMs 2000
+          $udp = Test-UdpPortBestEffort -HostName $h -Port $t.Port -Protocol $proto -TimeoutMs 2000
           [pscustomobject]@{
             Name     = $t.Name
             Protocol = 'UDP'
@@ -308,9 +337,10 @@ foreach ($round in $Rounds) {
 
 # Persist artifacts (JSON for details, CSV for quick diff)
 $all | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path $jsonPath
-$csvContent = ($all |
+$csvLines = $all |
   Select-Object Timestamp,Round,Protocol,Host,PingOk,TracertOk,PathpingOk,Tcp443OK |
-  ConvertTo-Csv -NoTypeInformation)
+  ConvertTo-Csv -NoTypeInformation
+$csvContent = $csvLines -join [Environment]::NewLine
 [System.IO.File]::WriteAllText($csvPath, $csvContent, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host "Diagnostics complete." -ForegroundColor Cyan

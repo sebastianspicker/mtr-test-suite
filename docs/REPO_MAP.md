@@ -5,8 +5,6 @@
 This repository provides a cross-platform network diagnostic suite:
 
 - `mtr-test-suite.sh`: primary Bash-based MTR test matrix (Linux/macOS)
-- `mtr-tests-enhanced.sh`: wrapper to the primary script (legacy entrypoint)
-- `mtr-test-suite_min-comments.sh`: wrapper to the primary script (legacy entrypoint)
 - `NetTestSuite.ps1`: Windows PowerShell diagnostic suite (ping, tracert, pathping, TCP/UDP probes)
 
 ## Entry Points
@@ -20,7 +18,7 @@ This repository provides a cross-platform network diagnostic suite:
 
 1. Parse CLI args and validate dependencies (bash 4+, `mtr`, `jq`, `column`).
 2. Prepare log files in `~/logs` (or `--log-dir`).
-3. Define test types (`TESTS`) and rounds (`ROUNDS`).
+3. Define test types and rounds via `TEST_ORDER` / `ROUND_ORDER` arrays and `case` blocks for per-type/round arguments.
 4. Nested loop: round → test type → host.
 5. Execute `mtr` per case, append JSON to `JSON_LOG`.
 6. Optional summary rendering via `jq` + `column` into `TABLE_LOG`.

@@ -12,6 +12,14 @@ SHFMT_VERSION="3.7.0"
 SHFMT_SHA256="0264c424278b18e22453fe523ec01a19805ce3b8ebf18eaf3aadc1edc23f42e3"
 SHFMT_URL="https://github.com/mvdan/sh/releases/download/v${SHFMT_VERSION}/shfmt_v${SHFMT_VERSION}_linux_amd64"
 
+# Pinned binaries are Linux x86_64 only; fail fast on other platforms with a clear message
+CI_OS=$(uname -s)
+CI_ARCH=$(uname -m)
+if [[ "$CI_OS" != "Linux" ]] || [[ "$CI_ARCH" != "x86_64" && "$CI_ARCH" != "amd64" ]]; then
+  echo "ERROR: ci-install-tools.sh is Linux x86_64/amd64 only (got: $CI_OS $CI_ARCH). Install shellcheck and shfmt manually (e.g. brew install shellcheck shfmt on macOS)." >&2
+  exit 1
+fi
+
 mkdir -p "$TOOLS_DIR"
 
 sha256_check() {
@@ -25,14 +33,14 @@ sha256_check() {
     actual=$(shasum -a 256 "$file" | awk '{print $1}')
   else
     echo "ERROR: No sha256 tool available" >&2
-    exit 1
+    return 1
   fi
 
   if [[ "$actual" != "$expected" ]]; then
     echo "ERROR: SHA256 mismatch for $file" >&2
     echo "Expected: $expected" >&2
     echo "Actual:   $actual" >&2
-    exit 1
+    return 1
   fi
 }
 
@@ -52,7 +60,10 @@ install_shellcheck() {
 
   local archive="$tmpdir/shellcheck.tar.xz"
   curl -sSL -o "$archive" "$SHELLCHECK_URL"
-  sha256_check "$archive" "$SHELLCHECK_SHA256"
+  sha256_check "$archive" "$SHELLCHECK_SHA256" || {
+    rm -rf "$tmpdir"
+    exit 1
+  }
 
   tar -xJf "$archive" -C "$tmpdir"
   local found
@@ -81,7 +92,10 @@ install_shfmt() {
 
   local target="$tmpdir/shfmt"
   curl -sSL -o "$target" "$SHFMT_URL"
-  sha256_check "$target" "$SHFMT_SHA256"
+  sha256_check "$target" "$SHFMT_SHA256" || {
+    rm -rf "$tmpdir"
+    exit 1
+  }
 
   mv "$target" "$bin"
   chmod +x "$bin"

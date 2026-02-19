@@ -4,6 +4,30 @@ Each item can be turned into a separate issue.
 
 ---
 
+## Implemented (this release)
+
+The following have been addressed in the codebase:
+
+- **1, 2, 20, 33:** Option/path validation (reject option-like values); `--` before path operands in mkdir, tee, rm.
+- **3, 21:** Dry-run is non-invasive (no mkdir, no log file creation/truncation).
+- **4, 22:** OK only on success; FAIL in failure branch; Pass/Fail count at end.
+- **5, 6, 7, 30, 34:** summarize_json: proper fallback (`${var:-???}`); defensive jq for hop IP (no capture throw); exit status reflects jq/column.
+- **8, 9, 10, 24, 35:** EXIT trap for temp cleanup; CURRENT_TMP set in one step with mktemp; trap handler uses echo >&2 (not log); log() resilient to tee failure.
+- **11, 29:** Parent dirs created for custom --json-log/--table-log; LOG_DIR/defaults documented in --help.
+- **12:** Failed mtr runs appended to JSON_LOG with `_failed` marker.
+- **13, 31:** PowerShell CSV: join with newline before WriteAllText.
+- **14, 26, 36:** PowerShell TCP probe bound to round protocol (IPv4/IPv6) via Test-TcpPort -Protocol.
+- **15, 37:** PowerShell: host names validated (reject leading - or /).
+- **16, 27, 32:** CI install: fail fast with clear message on non–Linux x86_64.
+- **17, 28, 40:** sha256_check returns 1; callers run cleanup and exit.
+- **18, 42:** Legacy wrappers removed; single entry point `./mtr-test-suite.sh`.
+- **19, 41:** README: clone URL and Configuration section aligned with script (TEST_ORDER/ROUND_ORDER).
+- **38, 39:** PowerShell: *Ok meaning documented in .NOTES; PSNativeCommandUseErrorActionPreference set in PS7.
+
+Remaining open or optional: **11** (doc only if behavior added), **25** (encoding/BOM doc), **38** (further *Ok vs path-OK), **39** (PS7 preference), and any platform-specific or enhancement items not listed above.
+
+---
+
 ## Known Limitations / Bugs
 
 ### 1. [Bug] Option arguments can swallow subsequent flags (no “looks-like-an-option” validation)

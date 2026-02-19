@@ -54,6 +54,14 @@ None (scripts only).
 
 ## Tests
 
+### Smoke test (canonical command)
+
+No network probes; use for quick validation and in CI:
+
+```bash
+./mtr-test-suite.sh --dry-run --no-summary
+```
+
 ### Fast loop (developer)
 
 ```bash
