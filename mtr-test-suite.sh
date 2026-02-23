@@ -141,7 +141,11 @@ summarize_json() {
     echo
     echo "Results for: ${dst_name} (${dst_ip})"
     printf 'Hop\tHost\tIP\tLoss%%\tSnt\tLast\tAvg\tBest\tWrst\tStDev\n'
-    echo "$table_out"
+    if [[ -n "$table_out" ]]; then
+      echo "$table_out"
+    else
+      echo "(No results)"
+    fi
     echo
   fi
   return "$jq_status"
@@ -297,7 +301,7 @@ main() {
           log "OK: completed $type -> $host"
         else
           {
-            echo '{"_failed":true,"type":"'"$type"'","host":"'"$host"'"}'
+            jq -n --arg type "$type" --arg host "$host" '{"_failed":true, $type, $host}'
             cat "$CURRENT_TMP"
             printf '\n'
           } >>"$JSON_LOG"

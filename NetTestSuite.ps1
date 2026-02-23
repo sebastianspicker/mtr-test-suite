@@ -47,7 +47,10 @@ param(
   [int]$PathpingProbes = 50,
 
   # Pathping timeout (ms)
-  [int]$PathpingTimeoutMs = 3000
+  [int]$PathpingTimeoutMs = 3000,
+
+  # Skip slow pathping diagnostic
+  [switch]$SkipPathping
 )
 
 Set-StrictMode -Version Latest
@@ -281,7 +284,11 @@ foreach ($round in $Rounds) {
       $trResult = Invoke-TracertRaw -Protocol $proto -HostName $h -ArgBuilder $round.TracertArgs
 
       # Pathping (hop-by-hop loss/latency)
-      $ppResult = Invoke-PathpingRaw -Protocol $proto -HostName $h -ArgBuilder $round.PathpingArgs
+      $ppResult = if ($SkipPathping) {
+        [pscustomobject]@{ Raw = @('Pathping skipped'); ExitCode = 0 }
+      } else {
+        Invoke-PathpingRaw -Protocol $proto -HostName $h -ArgBuilder $round.PathpingArgs
+      }
 
       # TCP 443 test bound to this round's protocol (IPv4 or IPv6)
       $tnc = Test-TcpPort -HostName $h -Port 443 -Hops 20 -Protocol $proto
@@ -336,12 +343,17 @@ foreach ($round in $Rounds) {
 }
 
 # Persist artifacts (JSON for details, CSV for quick diff)
-$all | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 -Path $jsonPath
+# Standardize on UTF-8 without BOM for cross-platform compatibility
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+
+$jsonContent = $all | ConvertTo-Json -Depth 6
+[System.IO.File]::WriteAllText($jsonPath, $jsonContent, $utf8NoBom)
+
 $csvLines = $all |
   Select-Object Timestamp,Round,Protocol,Host,PingOk,TracertOk,PathpingOk,Tcp443OK |
   ConvertTo-Csv -NoTypeInformation
 $csvContent = $csvLines -join [Environment]::NewLine
-[System.IO.File]::WriteAllText($csvPath, $csvContent, [System.Text.UTF8Encoding]::new($false))
+[System.IO.File]::WriteAllText($csvPath, $csvContent, $utf8NoBom)
 
 Write-Host "Diagnostics complete." -ForegroundColor Cyan
 Write-Host "JSON: $jsonPath"
