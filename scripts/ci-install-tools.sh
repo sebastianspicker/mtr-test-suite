@@ -59,7 +59,10 @@ install_shellcheck() {
   trap 'rm -rf "$tmpdir"' RETURN
 
   local archive="$tmpdir/shellcheck.tar.xz"
-  curl -sSL -o "$archive" "$SHELLCHECK_URL"
+  if ! curl -fSL -o "$archive" "$SHELLCHECK_URL"; then
+    echo "ERROR: Failed to download shellcheck from $SHELLCHECK_URL" >&2
+    return 1
+  fi
   sha256_check "$archive" "$SHELLCHECK_SHA256" || {
     rm -rf "$tmpdir"
     exit 1
@@ -91,7 +94,10 @@ install_shfmt() {
   trap 'rm -rf "$tmpdir"' RETURN
 
   local target="$tmpdir/shfmt"
-  curl -sSL -o "$target" "$SHFMT_URL"
+  if ! curl -fSL -o "$target" "$SHFMT_URL"; then
+    echo "ERROR: Failed to download shfmt from $SHFMT_URL" >&2
+    return 1
+  fi
   sha256_check "$target" "$SHFMT_SHA256" || {
     rm -rf "$tmpdir"
     exit 1

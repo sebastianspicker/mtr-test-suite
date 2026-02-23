@@ -76,9 +76,23 @@ function Test-HostNameSafe {
   if ($trimmed.StartsWith('-') -or $trimmed.StartsWith('/')) { return $false }
   return $true
 }
+
+# Reject paths that could be interpreted as options
+function Test-PathSafe {
+  param([string]$Path)
+  if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
+  $trimmed = $Path.Trim()
+  if ($trimmed.StartsWith('-')) { return $false }
+  return $true
+}
+
 $badHosts = @($HostsIPv4 + $HostsIPv6) | Where-Object { -not (Test-HostNameSafe $_) }
 if ($badHosts.Count -gt 0) {
   throw "Host names must not start with - or /: $($badHosts -join ', ')"
+}
+
+if (-not (Test-PathSafe $LogDirectory)) {
+  throw "LogDirectory must not be empty or start with '-': $LogDirectory"
 }
 
 # Define diagnostic "rounds" similar to the MTR concept (vary MTU/DF, TTL, timeouts)
@@ -109,8 +123,8 @@ $Rounds = @(
   }
 )
 
-# Gaming-related UDP/TCP target ports (add or adjust as needed)
-$GamingTargets = @(
+# Common service and gaming-related UDP/TCP target ports (add or adjust as needed)
+$PortTargets = @(
   [pscustomobject]@{ Name='Xbox Live'; Protocol='UDP'; Port=3074 }
   [pscustomobject]@{ Name='Steam';     Protocol='UDP'; Port=27015 }
   [pscustomobject]@{ Name='Steam';     Protocol='UDP'; Port=27016 }
@@ -133,6 +147,23 @@ function Get-ToolIpSwitch {
       Tracert = '-4'
       Pathping= '/4'
     }
+  }
+}
+
+# DNS resolution with timeout to prevent indefinite hangs
+function Get-HostAddressesWithTimeout {
+  param(
+    [Parameter(Mandatory)][string]$HostName,
+    [int]$TimeoutMs = 5000
+  )
+  try {
+    $task = [System.Net.Dns]::GetHostAddressesAsync($HostName)
+    if (-not $task.Wait($TimeoutMs)) {
+      return $null, "DNS resolution timed out after ${TimeoutMs}ms"
+    }
+    return $task.Result, $null
+  } catch {
+    return $null, "DNS resolution failed: $($_.Exception.Message)"
   }
 }
 
@@ -186,26 +217,31 @@ function Test-TcpPort {
     [Parameter(Mandatory)][int]$Port,
     [int]$Hops = 20,
     [ValidateSet('IPv4', 'IPv6')]
-    [string]$Protocol = 'IPv4'
+    [string]$Protocol = 'IPv4',
+    [int]$DnsTimeoutMs = 5000
   )
   $family = if ($Protocol -eq 'IPv6') { [System.Net.Sockets.AddressFamily]::InterNetworkV6 } else { [System.Net.Sockets.AddressFamily]::InterNetwork }
-  $addrs = [System.Net.Dns]::GetHostAddresses($HostName) | Where-Object { $_.AddressFamily -eq $family }
-  $addr = $addrs | Select-Object -First 1
+  $addrs, $dnsError = Get-HostAddressesWithTimeout -HostName $HostName -TimeoutMs $DnsTimeoutMs
+  if ($dnsError) {
+    return [pscustomobject]@{ TcpTestSucceeded = $false; TraceRoute = $null; DnsError = $dnsError }
+  }
+  $addr = $addrs | Where-Object { $_.AddressFamily -eq $family } | Select-Object -First 1
   if (-not $addr) {
-    return [pscustomobject]@{ TcpTestSucceeded = $false; TraceRoute = $null }
+    return [pscustomobject]@{ TcpTestSucceeded = $false; TraceRoute = $null; DnsError = "No $Protocol address for $HostName" }
   }
   $target = $addr.ToString()
   return (Test-NetConnection -ComputerName $target -Port $Port -TraceRoute -InformationLevel Detailed -Hops $Hops)
 }
 
-# Best-effort UDP probe: attempt to send a zero-byte datagram and detect "ICMP Port Unreachable" quickly.
+# Best-effort UDP probe: attempt to send a single-byte datagram and detect "ICMP Port Unreachable" quickly.
 # Protocol restricts resolution and socket to IPv4 or IPv6 so results match the current round.
 function Test-UdpPortBestEffort {
   param(
     [Parameter(Mandatory)][string]$HostName,
     [Parameter(Mandatory)][int]$Port,
     [Parameter(Mandatory)][ValidateSet('IPv4','IPv6')]$Protocol,
-    [int]$TimeoutMs = 2000
+    [int]$TimeoutMs = 2000,
+    [int]$DnsTimeoutMs = 5000
   )
 
   $result = [ordered]@{
@@ -221,8 +257,12 @@ function Test-UdpPortBestEffort {
   $udp = $null
   try {
     $family = if ($Protocol -eq 'IPv6') { [System.Net.Sockets.AddressFamily]::InterNetworkV6 } else { [System.Net.Sockets.AddressFamily]::InterNetwork }
-    $addrs = [System.Net.Dns]::GetHostAddresses($HostName) | Where-Object { $_.AddressFamily -eq $family }
-    $addr = $addrs | Select-Object -First 1
+    $addrs, $dnsError = Get-HostAddressesWithTimeout -HostName $HostName -TimeoutMs $DnsTimeoutMs
+    if ($dnsError) {
+      $result.Detail = $dnsError
+      return [pscustomobject]$result
+    }
+    $addr = $addrs | Where-Object { $_.AddressFamily -eq $family } | Select-Object -First 1
     if (-not $addr) {
       $result.Detail = "No $Protocol address for $HostName"
       return [pscustomobject]$result
@@ -293,8 +333,8 @@ foreach ($round in $Rounds) {
       # TCP 443 test bound to this round's protocol (IPv4 or IPv6)
       $tnc = Test-TcpPort -HostName $h -Port 443 -Hops 20 -Protocol $proto
 
-      # UDP/TCP gaming probes (best-effort UDP)
-      $portFindings = foreach ($t in $GamingTargets) {
+      # UDP/TCP port probes (best-effort UDP)
+      $portFindings = foreach ($t in $PortTargets) {
         if ($t.Protocol -eq 'TCP') {
           $tcp = Test-TcpPort -HostName $h -Port $t.Port -Hops 10 -Protocol $proto
           [pscustomobject]@{

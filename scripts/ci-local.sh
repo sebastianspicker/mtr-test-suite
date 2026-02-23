@@ -106,7 +106,10 @@ if [[ "$SKIP_PWSH" -eq 1 ]]; then
 fi
 
 if command -v pwsh >/dev/null 2>&1; then
-  pwsh -NoProfile -NonInteractive -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted; Install-Module PSScriptAnalyzer -Scope CurrentUser -Force; Invoke-ScriptAnalyzer -Path NetTestSuite.ps1 -Severity Error -EnableExit"
+  if ! pwsh -NoProfile -NonInteractive -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue; Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -ErrorAction Stop; Invoke-ScriptAnalyzer -Path NetTestSuite.ps1 -Severity Error -EnableExit"; then
+    echo "Warning: PowerShell static analysis failed. Check PSScriptAnalyzer installation or network connectivity." >&2
+    exit 1
+  fi
 else
   echo "Note: pwsh not found; skipping PowerShell static analysis" >&2
 fi

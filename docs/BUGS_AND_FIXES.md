@@ -24,6 +24,17 @@ The following have been addressed in the codebase:
 - **19, 41:** README: clone URL and Configuration section aligned with script (TEST_ORDER/ROUND_ORDER).
 - **38, 39:** PowerShell: *Ok meaning documented in .NOTES; PSNativeCommandUseErrorActionPreference set in PS7.
 
+### New Issues Fixed (2026-02-23 Deep Code Inspection)
+
+- **43 (P0):** Bash script: host name validation added (`validate_host()` function) to prevent option injection via HOSTS_IPV4/HOSTS_IPV6 arrays.
+- **44 (P1):** PowerShell: UDP probe comment corrected (single-byte datagram, not zero-byte).
+- **45 (P1):** PowerShell: DNS resolution now has timeout via `Get-HostAddressesWithTimeout()` function (5s default).
+- **46 (P2):** PowerShell: `$GamingTargets` renamed to `$PortTargets` to reflect inclusion of HTTP/HTTPS ports.
+- **47 (P2):** PowerShell: `$LogDirectory` validation added via `Test-PathSafe()` function.
+- **48 (P2):** CI install: curl now uses `-f` flag for proper error handling on download failures.
+- **49 (P2):** CI local: PSScriptAnalyzer installation now has proper error handling and exit code.
+- **50 (P3):** README: placeholder clone URL replaced with example URL.
+
 Remaining open or optional: **11** (doc only if behavior added), **25** (encoding/BOM doc), **38** (further *Ok vs path-OK), **39** (PS7 preference), and any platform-specific or enhancement items not listed above.
 
 ---

@@ -55,6 +55,17 @@ validate_path_option() {
   fi
 }
 
+# Reject host names that look like options (could be interpreted by mtr)
+validate_host() {
+  local host=$1
+  if [[ -z "$host" ]]; then
+    die "Host name must not be empty"
+  fi
+  if [[ "$host" == -* ]]; then
+    die "Host name must not look like an option (starts with -): $host"
+  fi
+}
+
 # Set extra_args (round-specific mtr options) by round name
 set_round_extra_args() {
   local round=$1
@@ -251,6 +262,11 @@ main() {
 
   HOSTS_IPV4=(netcologne.de google.com wikipedia.org amazon.de)
   HOSTS_IPV6=(netcologne.de google.com wikipedia.org)
+
+  # Validate all host names to prevent option injection
+  for h in "${HOSTS_IPV4[@]}" "${HOSTS_IPV6[@]}"; do
+    validate_host "$h"
+  done
 
   ROUND_ORDER=(Standard MTU1400 TOS_CS5 TOS_AF11 TTL10 TTL64 FirstTTL3 Timeout5)
 

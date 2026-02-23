@@ -4,24 +4,34 @@ An advanced, automated MTR-based network path testing suite with JSON logging, D
 
 ## Table of Contents
 
-1. [Overview](#overview)  
-2. [Features](#features)  
-3. [Prerequisites](#prerequisites)  
-4. [Installation](#installation)  
-5. [Quickstart](#quickstart)  
-6. [Usage](#usage)  
-7. [Configuration](#configuration)  
-8. [Logging & Output](#logging--output)  
-9. [Advanced Integration](#advanced-integration)  
-10. [Validation (build / run / test)](#validation-build--run--test)  
-11. [Development](#development)  
-12. [Testing](#testing)  
-13. [Security](#security)  
-14. [Known issues](#known-issues)  
-15. [Troubleshooting](#troubleshooting)  
-16. [Changelog](#changelog)  
-17. [Contributing](#contributing)  
-18. [License](#license)
+- [mtr-test-suite v1.0](#mtr-test-suite-v10)
+  - [Table of Contents](#table-of-contents)
+  - [Overview](#overview)
+  - [Features](#features)
+  - [Prerequisites](#prerequisites)
+    - [Linux/macOS (Bash suite)](#linuxmacos-bash-suite)
+    - [Windows (PowerShell suite)](#windows-powershell-suite)
+  - [Installation](#installation)
+  - [Quickstart](#quickstart)
+  - [Usage](#usage)
+    - [Linux/macOS (Bash suite)](#linuxmacos-bash-suite-1)
+    - [Options](#options)
+    - [Running as a Background Job](#running-as-a-background-job)
+    - [Windows (PowerShell suite)](#windows-powershell-suite-1)
+  - [Configuration](#configuration)
+    - [Hosts](#hosts)
+    - [Test Types and Rounds](#test-types-and-rounds)
+  - [Logging \& Output](#logging--output)
+  - [Advanced Integration](#advanced-integration)
+  - [Validation (build / run / test)](#validation-build--run--test)
+  - [Development](#development)
+  - [Testing](#testing)
+  - [Security](#security)
+  - [Known issues](#known-issues)
+  - [Troubleshooting](#troubleshooting)
+  - [Changelog](#changelog)
+  - [Contributing](#contributing)
+  - [License](#license)
 
 ## Overview
 
@@ -92,7 +102,8 @@ Note: macOS ships Bash 3.2 by default; the suite requires Bash 4+.
 ## Installation
 
 ```bash
-git clone <this-repository-url>
+# Clone the repository
+git clone https://github.com/your-org/mtr-test-suite.git
 cd mtr-test-suite
 chmod +x mtr-test-suite.sh
 ```
