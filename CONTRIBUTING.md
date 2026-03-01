@@ -1,27 +1,24 @@
 # Contributing
 
-Thanks for contributing!
+Thanks for contributing.
 
-## Development requirements
+## Prerequisites
 
-- `bash` (v4+)
+- Bash 4+
 - `shellcheck`
 - `shfmt`
 
-## Local validation
+Setup and operational details are in [docs/RUNBOOK.md](docs/RUNBOOK.md).
+
+## Local Validation
 
 ```bash
 make validate
+./mtr-test-suite.sh --dry-run --no-summary
 ```
 
-## Formatting
+Optional CI-style local run:
 
 ```bash
-make fmt
-```
-
-## Linting
-
-```bash
-make lint
+scripts/ci-local.sh
 ```

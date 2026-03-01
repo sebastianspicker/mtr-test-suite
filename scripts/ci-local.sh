@@ -45,6 +45,7 @@ if [[ "$SKIP_INSTALL" -eq 0 ]]; then
   if [[ "$(uname -s)" == "Linux" ]]; then
     "${ROOT_DIR}/scripts/ci-install-tools.sh"
   else
+    # Non-Linux hosts must provide shellcheck/shfmt themselves.
     echo "Note: ci-install-tools.sh is Linux-only. Install shellcheck and shfmt manually." >&2
   fi
 fi
@@ -64,26 +65,19 @@ if ! command -v shfmt >/dev/null 2>&1; then
 fi
 
 find_bash4() {
-  local candidate
+  local candidate path major
   for candidate in bash /opt/homebrew/bin/bash /usr/local/bin/bash; do
     if [[ "$candidate" == "bash" ]]; then
-      if command -v bash >/dev/null 2>&1; then
-        local major
-        major=$(bash -c "echo \${BASH_VERSINFO[0]}" 2>/dev/null || echo 0)
-        if [[ "$major" -ge 4 ]]; then
-          echo "bash"
-          return 0
-        fi
-      fi
+      command -v bash >/dev/null 2>&1 || continue
+      path=$(command -v bash)
     else
-      if [[ -x "$candidate" ]]; then
-        local major
-        major=$("$candidate" -c "echo \${BASH_VERSINFO[0]}" 2>/dev/null || echo 0)
-        if [[ "$major" -ge 4 ]]; then
-          echo "$candidate"
-          return 0
-        fi
-      fi
+      [[ -x "$candidate" ]] || continue
+      path=$candidate
+    fi
+    major=$("$path" -c "echo \${BASH_VERSINFO[0]}" 2>/dev/null || echo 0)
+    if [[ "$major" -ge 4 ]]; then
+      echo "$path"
+      return 0
     fi
   done
   return 1
@@ -106,6 +100,7 @@ if [[ "$SKIP_PWSH" -eq 1 ]]; then
 fi
 
 if command -v pwsh >/dev/null 2>&1; then
+  # PSGallery access may be restricted in some enterprise/offline environments.
   if ! pwsh -NoProfile -NonInteractive -Command "Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue; Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -ErrorAction Stop; Invoke-ScriptAnalyzer -Path NetTestSuite.ps1 -Severity Error -EnableExit"; then
     echo "Warning: PowerShell static analysis failed. Check PSScriptAnalyzer installation or network connectivity." >&2
     exit 1

@@ -1,265 +1,186 @@
-# mtr-test-suite v1.0
-
-An advanced, automated MTR-based network path testing suite with JSON logging, DSCP/TOS, MTU & TTL variations, MPLS & AS‑lookup, and live console output.
-
-## Table of Contents
-
-- [mtr-test-suite v1.0](#mtr-test-suite-v10)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Features](#features)
-  - [Prerequisites](#prerequisites)
-    - [Linux/macOS (Bash suite)](#linuxmacos-bash-suite)
-    - [Windows (PowerShell suite)](#windows-powershell-suite)
-  - [Installation](#installation)
-  - [Quickstart](#quickstart)
-  - [Usage](#usage)
-    - [Linux/macOS (Bash suite)](#linuxmacos-bash-suite-1)
-    - [Options](#options)
-    - [Running as a Background Job](#running-as-a-background-job)
-    - [Windows (PowerShell suite)](#windows-powershell-suite-1)
-  - [Configuration](#configuration)
-    - [Hosts](#hosts)
-    - [Test Types and Rounds](#test-types-and-rounds)
-  - [Logging \& Output](#logging--output)
-  - [Advanced Integration](#advanced-integration)
-  - [Validation (build / run / test)](#validation-build--run--test)
-  - [Development](#development)
-  - [Testing](#testing)
-  - [Security](#security)
-  - [Known issues](#known-issues)
-  - [Troubleshooting](#troubleshooting)
-  - [Changelog](#changelog)
-  - [Contributing](#contributing)
-  - [License](#license)
+# mtr-test-suite
 
 ## Overview
 
-`mtr-test-suite` v1.0 is a Bash script that automates comprehensive network path analysis using MTR. It runs multiple test rounds against a set of hosts, capturing latency, packet loss, jitter, and routing behaviors under diverse protocols and conditions. It produces:
+Cross-platform network diagnostics:
+- `mtr-test-suite.sh` for Linux/macOS (MTR matrix with JSON + summary logs)
+- `NetTestSuite.ps1` for Windows PowerShell (ping/tracert/pathping/TCP+UDP probes)
 
-- **JSON_LOG**: raw per-run JSON output archived to `mtr_results_<timestamp>.json.log`  
-- **TABLE_LOG**: human-readable summaries archived to `mtr_summary_<timestamp>.log`  
-- **Console**: real-time progress, errors, and table output
+## Quickstart
 
-Estimated runtime with defaults (~280 runs × 5 min each ≈ 24 hours).
+Prerequisites:
+- Linux/macOS: Bash 4+, `mtr`
+- Optional for Bash summaries: `jq`, `column`
+- Windows: PowerShell 5.1+ with built-in `ping`, `tracert`, `pathping`, `Test-NetConnection`
 
-## Features
-
-- **Protocol Coverage**  
-  - ICMP (IPv4 & IPv6)  
-  - UDP (IPv4 & IPv6)  
-  - TCP (port 443 IPv4 & IPv6)  
-  - MPLS label stack (`-e`)  
-  - AS‑lookup (`-z --aslookup`)
-- **Test Scenarios**  
-  - Standard  
-  - MTU 1400-byte (`-s 1400`)  
-  - DSCP/TOS CS5 (`--tos 160`), AF11 (`--tos 40`)  
-  - TTL variation: 10, 64, first run at TTL 3 (`-f 3`)  
-  - Socket timeout extension (`-Z 5`)
-- **Dual Logging**  
-  - Raw JSON for automated parsing  
-  - Tabular summaries for human readability
-- **Live Console Output**  
-  - Progress & errors via `log()`  
-  - Table display via `jq` + `column`
-- **Robust Error Handling**  
-  - `set -euo pipefail`  
-  - Per-test fallback ensures suite continues on failures
-
-## Prerequisites
-
-### Linux/macOS (Bash suite)
-
-- **Bash** (v4.x+ required to run the full suite)  
-- **MTR** (with `--json`, MPLS, AS‑lookup support)  
-- **jq**  
-- **column** (`util-linux`)
-
-**Debian/Ubuntu**:
+Clone and prepare:
 ```bash
-sudo apt update
-sudo apt install bash jq util-linux
-sudo apt install mtr # package name may also be: mtr-tiny
-```
-**CentOS/RHEL**:
-```bash
-sudo yum install epel-release
-sudo yum install bash mtr jq util-linux
-```
-
-**macOS (Homebrew)**:
-```bash
-brew install bash mtr jq
-```
-Note: macOS ships Bash 3.2 by default; the suite requires Bash 4+.
-
-### Windows (PowerShell suite)
-
-- PowerShell 5.1+
-- Built-in tools: `ping`, `tracert`, `pathping`, `Test-NetConnection`
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/mtr-test-suite.git
+git clone https://github.com/sebastianspicker/mtr-test-suite.git
 cd mtr-test-suite
 chmod +x mtr-test-suite.sh
 ```
 
-## Quickstart
-
-Linux/macOS:
+Linux/macOS dry-run (no probes):
 ```bash
 ./mtr-test-suite.sh --dry-run --no-summary
-./mtr-test-suite.sh
 ```
 
-Windows:
-```powershell
-powershell -ExecutionPolicy Bypass -File .\NetTestSuite.ps1
-```
-
-## Usage
-
-### Linux/macOS (Bash suite)
-
+Linux/macOS full run:
 ```bash
 ./mtr-test-suite.sh
 ```
 
-Note: depending on how `mtr` is installed on your system, some probe types may require elevated privileges (e.g. `sudo`) or `cap_net_raw`.
-
-Abort anytime with **Ctrl+C**; partial results remain saved.
-
-### Options
-
-```bash
-./mtr-test-suite.sh --help
-./mtr-test-suite.sh --log-dir /var/log/mtr-suite
-./mtr-test-suite.sh --json-log ./mtr.json.log --table-log ./mtr.table.log
-./mtr-test-suite.sh --no-summary     # JSON only (no jq/column)
-./mtr-test-suite.sh --dry-run        # print planned runs only (no files created)
-./mtr-test-suite.sh --quiet          # only errors and final summary
-```
-
-### Running as a Background Job
-
-To launch the suite detached from your terminal:
-```bash
-nohup ./mtr-test-suite.sh > /dev/null 2>&1 &
-```
-This will continue running after you log out.
-
-To follow the raw JSON logs in real time:
-```bash
-tail -f ~/logs/mtr_results_*.json.log
-```
-
-To follow the human-readable summaries in real time:
-```bash
-tail -f ~/logs/mtr_summary_*.log
-```
-
-### Windows (PowerShell suite)
-
+Windows PowerShell full run:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\NetTestSuite.ps1
 ```
 
-Outputs:
-- JSON: `%USERPROFILE%\logs\net_results_<timestamp>.json`
-- CSV:  `%USERPROFILE%\logs\net_summary_<timestamp>.csv`
+Windows/PowerShell dry-run:
+```powershell
+pwsh -NoProfile -NonInteractive -File .\NetTestSuite.ps1 -DryRun
+```
+
+## How It Works
+
+```mermaid
+flowchart TB
+  A["Start"] --> B["Parse CLI/parameters"]
+  B --> C{"Dry-run?"}
+  C -->|Yes| D["Build run plan only"]
+  D --> E["Print planned runs + output paths"]
+  E --> Z["Exit"]
+
+  C -->|No| F["Validate runtime dependencies"]
+  F --> G["Resolve hosts (config/overrides)"]
+  G --> H["Compute run matrix (round × type/protocol × host)"]
+  H --> I["Execute probes per run"]
+  I --> J{"Run success?"}
+  J -->|Yes| K["Append success data to JSON/CSV/table outputs"]
+  J -->|No| L["Append failure marker + partial raw output"]
+  K --> M["Update counters + progress"]
+  L --> M
+  M --> N{"More runs?"}
+  N -->|Yes| I
+  N -->|No| O["Emit final summary + exit code"]
+  O --> Z
+```
+
+Entry condition: the script starts with CLI/parameter parsing and resolves the selected execution mode.
+Exit condition: dry-run exits after plan output; full run exits after summary with success/failure status.
+Outputs: Bash writes JSON+table logs; PowerShell writes JSON+CSV summaries in the configured log directory.
+
+## Lifecycle
+
+```mermaid
+flowchart LR
+  A["Clone repository"] --> B["Install prerequisites"]
+  B --> C["Run validate + dry-run smoke test"]
+  C --> D{"Use case"}
+  D -->|Linux/macOS| E["Run mtr-test-suite.sh"]
+  D -->|Windows| F["Run NetTestSuite.ps1"]
+  E --> G["Collect logs/artifacts"]
+  F --> G
+  G --> H["Analyze results / troubleshoot"]
+  H --> I["Tune hosts, rounds, protocols"]
+  I --> C
+```
+
+Entry condition: cloned repository with prerequisites installed.
+Exit condition: diagnostics complete and artifacts collected for analysis.
+Feedback loop: tune host/round/protocol selection and rerun smoke/full diagnostics as needed.
 
 ## Configuration
 
-### Hosts
+Both suites read defaults from [`config/hosts.conf`](config/hosts.conf) when present.
 
-Edit in `mtr-test-suite.sh`:
-```bash
-HOSTS_IPV4=( netcologne.de google.com wikipedia.org amazon.de )
-HOSTS_IPV6=( netcologne.de google.com wikipedia.org )
+Format:
+```ini
+ipv4=example.com
+ipv6=example.com
 ```
 
-### Test Types and Rounds
+Command-line host overrides take precedence over config defaults.
 
-The script uses `TEST_ORDER` and `ROUND_ORDER` arrays plus `case` blocks for test/round arguments. Edit `mtr-test-suite.sh` to change test types (e.g. ICMP4, UDP4, TCP4, MPLS4, AS4 and IPv6 variants) and rounds (Standard, MTU1400, TOS_CS5, TOS_AF11, TTL10, TTL64, FirstTTL3, Timeout5).
+## Bash Usage
 
-## Logging & Output
-
-- **JSON_LOG**: `~/logs/mtr_results_<timestamp>.json.log`  
-- **TABLE_LOG**: `~/logs/mtr_summary_<timestamp>.log`  
-- **Console**: real-time progress & table display
-
-**Parse JSON**:
 ```bash
-jq '.report.hubs[] | {hop: .count, loss: ."Loss%", avg: .Avg}' ~/logs/*.json.log
+./mtr-test-suite.sh [options]
 ```
 
-## Advanced Integration
+Key options:
+- `--types CSV` select test types (for example `ICMP4,TCP4`)
+- `--rounds CSV` select rounds (for example `Standard,TTL64`)
+- `--hosts4 CSV` override IPv4 hosts
+- `--hosts6 CSV` override IPv6 hosts
+- `--list-types` print supported test types
+- `--list-rounds` print supported rounds
+- `--dry-run` print planned runs only
+- `--no-summary` skip jq/column summary tables
+- `--quiet` print warnings/failures/final summary only
+- `--log-dir`, `--json-log`, `--table-log` control output locations
 
-- **Cron & Alerts**: schedule and parse logs for threshold breaches  
-- **Time‑Series DB**: convert JSON to InfluxDB/Prometheus format  
-- **Geo/ASN Enrichment**: add `geoiplookup`/`whois` in `summarize_json()`
+Examples:
+```bash
+./mtr-test-suite.sh --dry-run --types ICMP4,TCP4 --rounds Standard --hosts4 localhost
+./mtr-test-suite.sh --log-dir /tmp/mtr-logs
+./mtr-test-suite.sh --list-types
+./mtr-test-suite.sh --list-rounds
+```
 
-## Validation (build / run / test)
+## PowerShell Usage
 
-| Action | Command |
-|--------|---------|
-| **Lint & format check** | `make validate` |
-| **Format scripts** | `make fmt` |
-| **Lint only** | `make lint` |
-| **Smoke test (no network)** | See [docs/RUNBOOK.md](docs/RUNBOOK.md) (canonical: `./mtr-test-suite.sh --dry-run --no-summary`) |
-| **Full Bash suite** | `./mtr-test-suite.sh` |
-| **Windows suite** | `powershell -ExecutionPolicy Bypass -File .\NetTestSuite.ps1` |
-| **Local CI-style checks** | `scripts/ci-local.sh` (optional; use `--skip-pwsh` if PowerShell unavailable) |
+```powershell
+pwsh -NoProfile -NonInteractive -File .\NetTestSuite.ps1 [options]
+```
 
-See [docs/RUNBOOK.md](docs/RUNBOOK.md) for setup and full command matrix.
+Key options:
+- `-Protocols @('IPv4','IPv6')` filter protocol families
+- `-Rounds @('Standard','TTL64_Timeout5s')` filter diagnostic rounds
+- `-HostsIPv4`, `-HostsIPv6` override hosts
+- `-DryRun` print planned runs only
+- `-Quiet` print warnings/failures/final summary only
+- `-LogDirectory` set output directory
+- `-SkipPathping` skip slow pathping stage
 
-## Development
+Examples:
+```powershell
+pwsh -NoProfile -NonInteractive -File .\NetTestSuite.ps1 -DryRun -Protocols IPv4 -Rounds Standard
+pwsh -NoProfile -NonInteractive -File .\NetTestSuite.ps1 -HostsIPv4 localhost -HostsIPv6 localhost -SkipPathping
+```
+
+## Outputs
+
+Bash:
+- `mtr_results_<timestamp>.json.log`
+- `mtr_summary_<timestamp>.log`
+
+PowerShell:
+- `net_results_<timestamp>.json`
+- `net_summary_<timestamp>.csv`
+
+Default output directory is `~/logs` (or `%USERPROFILE%\logs` with fallback resolution in PowerShell).
+
+## Validation
 
 ```bash
 make validate
-make fmt    # format
-make lint   # lint only
+./mtr-test-suite.sh --dry-run --no-summary
+./mtr-test-suite.sh --list-types
+./mtr-test-suite.sh --list-rounds
+pwsh -NoProfile -NonInteractive -File .\NetTestSuite.ps1 -DryRun -Quiet
 ```
 
-## Testing
-
-Fast smoke test (no network probes): see [docs/RUNBOOK.md](docs/RUNBOOK.md) for the canonical command (`./mtr-test-suite.sh --dry-run --no-summary`).
-
-Full suite (long-running):
+Optional local CI-style checks:
 ```bash
-./mtr-test-suite.sh
+scripts/ci-local.sh --skip-install
 ```
 
-## Security
+## Links
 
-Please report vulnerabilities privately. See [SECURITY.md](SECURITY.md).
-
-Notes:
-- Running probes may require elevated privileges or `cap_net_raw`.
-- Do not include secrets in logs or issue reports.
-
-## Known issues
-
-Known bugs and required fixes are listed in [docs/BUGS_AND_FIXES.md](docs/BUGS_AND_FIXES.md). Use that document for issue creation; the [Quick reference: common failure causes](docs/BUGS_AND_FIXES.md#quick-reference-common-failure-causes) table helps with troubleshooting.
-
-## Troubleshooting
-
-- `Bash 4+ required` → install a newer bash and run `bash ./mtr-test-suite.sh`.
-- `Missing dependency: mtr` → install `mtr` and ensure it supports `--json`.
-- `column: command not found` → install `util-linux` (Linux) or `column` via Homebrew.
-- Permission errors → run with `sudo` or set `cap_net_raw` for `mtr`.
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md).
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+- Runbook: [docs/RUNBOOK.md](docs/RUNBOOK.md)
+- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## License
 

@@ -44,67 +44,66 @@ sha256_check() {
   fi
 }
 
-install_shellcheck() {
-  local bin="$TOOLS_DIR/shellcheck"
+# Generic installer: name, version, version_grep (for --version), expected_sha, url, is_tarball (1=tar.xz, 0=single file)
+install_pinned_binary() {
+  local name=$1
+  local version=$2
+  local version_grep=$3
+  local expected_sha=$4
+  local url=$5
+  local is_tarball=$6
+  local bin="$TOOLS_DIR/$name"
 
   if [[ -x "$bin" ]]; then
-    if "$bin" --version 2>/dev/null | grep -q "version: ${SHELLCHECK_VERSION}"; then
+    if "$bin" --version 2>/dev/null | grep -q "$version_grep"; then
       return 0
     fi
   fi
 
-  echo "Installing shellcheck v${SHELLCHECK_VERSION}"
+  echo "Installing $name v${version}"
   local tmpdir
   tmpdir=$(mktemp -d)
   trap 'rm -rf "$tmpdir"' RETURN
 
-  local archive="$tmpdir/shellcheck.tar.xz"
-  if ! curl -fSL -o "$archive" "$SHELLCHECK_URL"; then
-    echo "ERROR: Failed to download shellcheck from $SHELLCHECK_URL" >&2
-    return 1
+  if [[ "$is_tarball" -eq 1 ]]; then
+    local archive="$tmpdir/$name.tar.xz"
+    if ! curl -fSL -o "$archive" "$url"; then
+      echo "ERROR: Failed to download $name from $url" >&2
+      return 1
+    fi
+    sha256_check "$archive" "$expected_sha" || {
+      rm -rf "$tmpdir"
+      exit 1
+    }
+    tar -xJf "$archive" -C "$tmpdir"
+    local found
+    found=$(find "$tmpdir" -type f -name "$name" 2>/dev/null | head -1)
+    [[ -n "$found" ]] || {
+      echo "ERROR: $name binary not found in archive" >&2
+      return 1
+    }
+    mv "$found" "$bin"
+  else
+    local target="$tmpdir/$name"
+    if ! curl -fSL -o "$target" "$url"; then
+      echo "ERROR: Failed to download $name from $url" >&2
+      return 1
+    fi
+    sha256_check "$target" "$expected_sha" || {
+      rm -rf "$tmpdir"
+      exit 1
+    }
+    mv "$target" "$bin"
   fi
-  sha256_check "$archive" "$SHELLCHECK_SHA256" || {
-    rm -rf "$tmpdir"
-    exit 1
-  }
-
-  tar -xJf "$archive" -C "$tmpdir"
-  local found
-  found=$(find "$tmpdir" -type f -name shellcheck 2>/dev/null | head -1)
-  [[ -n "$found" ]] || {
-    echo "ERROR: shellcheck binary not found in archive" >&2
-    return 1
-  }
-  mv "$found" "$bin"
   chmod +x "$bin"
 }
 
+install_shellcheck() {
+  install_pinned_binary shellcheck "$SHELLCHECK_VERSION" "version: ${SHELLCHECK_VERSION}" "$SHELLCHECK_SHA256" "$SHELLCHECK_URL" 1
+}
+
 install_shfmt() {
-  local bin="$TOOLS_DIR/shfmt"
-
-  if [[ -x "$bin" ]]; then
-    if "$bin" --version 2>/dev/null | grep -q "v${SHFMT_VERSION}"; then
-      return 0
-    fi
-  fi
-
-  echo "Installing shfmt v${SHFMT_VERSION}"
-  local tmpdir
-  tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' RETURN
-
-  local target="$tmpdir/shfmt"
-  if ! curl -fSL -o "$target" "$SHFMT_URL"; then
-    echo "ERROR: Failed to download shfmt from $SHFMT_URL" >&2
-    return 1
-  fi
-  sha256_check "$target" "$SHFMT_SHA256" || {
-    rm -rf "$tmpdir"
-    exit 1
-  }
-
-  mv "$target" "$bin"
-  chmod +x "$bin"
+  install_pinned_binary shfmt "$SHFMT_VERSION" "v${SHFMT_VERSION}" "$SHFMT_SHA256" "$SHFMT_URL" 0
 }
 
 install_shellcheck
