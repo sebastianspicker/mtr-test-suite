@@ -39,6 +39,16 @@ validation.md
 .env
 .env.*
 
+# Private keys and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.credentials
+credentials.json
+
 # CI/tooling caches
 .ci-tools/
 .cache/
