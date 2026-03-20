@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache CI tools
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
         with:
           path: .ci-tools
           key: ci-tools-${{ runner.os }}-shellcheck-0.9.0-shfmt-3.7.0
