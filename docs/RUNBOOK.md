@@ -55,6 +55,22 @@ make lint
 make validate
 ```
 
+## Testing
+
+Install test dependencies (one-time):
+
+```bash
+scripts/install-test-deps.sh
+```
+
+Run tests:
+
+```bash
+make test          # all tests (Bash + PowerShell)
+make test-bash     # Bash unit + integration tests (bats-core)
+make test-pwsh     # PowerShell tests (Pester)
+```
+
 Optional local CI-like run:
 
 ```bash
@@ -102,12 +118,12 @@ pwsh -NoProfile -NonInteractive -File .\NetTestSuite.ps1 -Protocols IPv4 -Rounds
 ## Output Artifacts
 
 Bash:
-- `mtr_results_<timestamp>.json.log`
-- `mtr_summary_<timestamp>.log`
+- `mtr_results_<timestamp>_<pid>.json.log`
+- `mtr_summary_<timestamp>_<pid>.log`
 
 PowerShell:
-- `net_results_<timestamp>.json`
-- `net_summary_<timestamp>.csv`
+- `net_results_<timestamp>_<pid>.json`
+- `net_summary_<timestamp>_<pid>.csv`
 
 Defaults:
 - Bash: `~/logs`
@@ -141,6 +157,7 @@ CI includes:
 ```bash
 git status --short
 make validate
+make test
 ./mtr-test-suite.sh --dry-run --no-summary
 ./mtr-test-suite.sh --list-types
 ./mtr-test-suite.sh --list-rounds

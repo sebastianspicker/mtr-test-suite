@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook: lint staged shell and PowerShell files
+
+STAGED_SH=$(git diff --cached --name-only --diff-filter=ACM | grep '\.sh$' || true)
+if [[ -n "$STAGED_SH" ]]; then
+  echo "==> shellcheck on staged .sh files..."
+  # shellcheck disable=SC2086
+  shellcheck -x $STAGED_SH
+  echo "==> shfmt check on staged .sh files..."
+  # shellcheck disable=SC2086
+  shfmt -d -i 2 -ci $STAGED_SH
+fi
+
+STAGED_PS1=$(git diff --cached --name-only --diff-filter=ACM | grep '\.ps1$' || true)
+if [[ -n "$STAGED_PS1" ]] && command -v pwsh >/dev/null 2>&1; then
+  echo "==> PSScriptAnalyzer on staged .ps1 files..."
+  for f in $STAGED_PS1; do
+    pwsh -NoProfile -NonInteractive -Command \
+      "Invoke-ScriptAnalyzer -Path '$f' -Severity Error -EnableExit"
+  done
+fi
+
+echo "Pre-commit checks passed."

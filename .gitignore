@@ -49,6 +49,12 @@ id_ed25519*
 *.credentials
 credentials.json
 
+# Ralph Loop orchestration scaffolding
+.ralph/
+
+# Test artifacts
+testResults.xml
+
 # CI/tooling caches
 .ci-tools/
 .cache/

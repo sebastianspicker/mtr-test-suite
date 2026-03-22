@@ -60,8 +60,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path ci-artifacts | Out-Null
           Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force -RequiredVersion 1.23.0
           Invoke-ScriptAnalyzer -Path NetTestSuite.ps1 -Severity Error -EnableExit | Tee-Object -FilePath ci-artifacts/psscriptanalyzer.log
+          Invoke-ScriptAnalyzer -Path lib-ps/ -Recurse -Severity Error -EnableExit | Tee-Object -Append -FilePath ci-artifacts/psscriptanalyzer.log
 
       - name: Upload CI artifacts on failure
         if: failure()
@@ -69,6 +70,39 @@ jobs:
         with:
           name: ci-artifacts-${{ github.job }}
           path: ci-artifacts
+          if-no-files-found: ignore
+
+  test:
+    name: Unit + Integration tests
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    needs: [lint]
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Run Bash tests
+        run: |
+          set -euo pipefail
+          tests/bats/bin/bats tests/
+
+      - name: Run PowerShell tests
+        shell: pwsh
+        run: |
+          Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -Force -Scope CurrentUser -RequiredVersion 5.6.1
+          Invoke-Pester tests/ -CI
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: test-artifacts
+          path: tests/
           if-no-files-found: ignore
 
   secret_scan:

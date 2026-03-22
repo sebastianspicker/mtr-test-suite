@@ -1,21 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="1.1.0"
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
+# shellcheck source=lib/common.sh
+source "$SCRIPT_DIR/lib/common.sh"
+# shellcheck source=lib/validation.sh
+source "$SCRIPT_DIR/lib/validation.sh"
+# shellcheck source=lib/config.sh
+source "$SCRIPT_DIR/lib/config.sh"
+# shellcheck source=lib/mtr_args.sh
+source "$SCRIPT_DIR/lib/mtr_args.sh"
+# shellcheck source=lib/logging.sh
+source "$SCRIPT_DIR/lib/logging.sh"
+# shellcheck source=lib/plan.sh
+source "$SCRIPT_DIR/lib/plan.sh"
+# shellcheck source=lib/runner.sh
+source "$SCRIPT_DIR/lib/runner.sh"
+
+VERSION="1.1.0"
 ALL_TEST_TYPES=(ICMP4 ICMP6 UDP4 UDP6 TCP4 TCP6 MPLS4 MPLS6 AS4 AS6)
 ALL_ROUNDS=(Standard MTU1400 TOS_CS5 TOS_AF11 TTL10 TTL64 FirstTTL3 Timeout5)
 DEFAULT_HOSTS_IPV4=(netcologne.de google.com wikipedia.org amazon.de)
 DEFAULT_HOSTS_IPV6=(netcologne.de google.com wikipedia.org)
 
-die() {
-  echo "ERROR: $*" >&2
-  exit 1
-}
-
 usage() {
-  cat <<'USAGE'
-mtr-test-suite.sh v1.1.0
+  cat <<USAGE
+mtr-test-suite.sh v${VERSION}
 
 Runs an MTR test matrix (types x rounds x hosts) and writes:
   - JSON_LOG: raw per-run JSON output
@@ -45,367 +56,6 @@ Options:
 USAGE
 }
 
-require_bash4() {
-  if [[ -z "${BASH_VERSION:-}" ]]; then
-    die "Please run this script with bash: bash $0"
-  fi
-  if ((BASH_VERSINFO[0] < 4)); then
-    die "Bash 4+ required (found: ${BASH_VERSION})."
-  fi
-}
-
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || die "Missing dependency: $1"
-}
-
-trim() {
-  local v=$1
-  v="${v#"${v%%[![:space:]]*}"}"
-  v="${v%"${v##*[![:space:]]}"}"
-  printf '%s' "$v"
-}
-
-contains_item() {
-  local needle=$1
-  shift
-  local item
-  for item in "$@"; do
-    if [[ "$item" == "$needle" ]]; then
-      return 0
-    fi
-  done
-  return 1
-}
-
-print_list() {
-  local item
-  for item in "$@"; do
-    echo "$item"
-  done
-}
-
-parse_csv_to_array() {
-  local csv=$1
-  local opt_name=$2
-  local -a raw=()
-  local item clean
-
-  PARSED_CSV_ITEMS=()
-
-  [[ -n "$csv" ]] || die "$opt_name requires a non-empty CSV argument"
-  if [[ "$csv" == ,* || "$csv" == *, || "$csv" == *,,* ]]; then
-    die "$opt_name contains malformed CSV separators"
-  fi
-
-  IFS=',' read -r -a raw <<<"$csv"
-  for item in "${raw[@]}"; do
-    clean=$(trim "$item")
-    [[ -n "$clean" ]] || die "$opt_name contains an empty item"
-    PARSED_CSV_ITEMS+=("$clean")
-  done
-}
-
-validate_selection() {
-  local label=$1
-  shift
-  local -a selected=()
-  local -a allowed=("$@")
-  local item
-
-  selected=("${PARSED_CSV_ITEMS[@]}")
-  for item in "${selected[@]}"; do
-    contains_item "$item" "${allowed[@]}" || die "Unknown $label: $item"
-  done
-}
-
-validate_path_option() {
-  local opt_name=$1
-  local val=$2
-  local normalized
-  normalized=$(trim "$val")
-  if [[ -z "$normalized" ]]; then
-    die "$opt_name argument must not be empty"
-  fi
-  if [[ -n "$val" && "$val" == -* ]]; then
-    die "$opt_name argument must not look like an option (starts with -): $val"
-  fi
-  if [[ -n "$val" && "$val" == *[[:cntrl:]]* ]]; then
-    die "$opt_name argument must not contain control characters"
-  fi
-  if [[ -n "$val" && ("$val" == *'/../'* || "$val" == '../'* || "$val" == *'/..') ]]; then
-    die "$opt_name argument must not contain path traversal (..): $val"
-  fi
-}
-
-require_path_option() {
-  local opt_name=$1
-  local argc=$2
-  local val=$3
-  [[ $argc -ge 2 ]] || die "$opt_name requires an argument"
-  validate_path_option "$opt_name" "$val"
-}
-
-validate_host() {
-  local host=$1
-  [[ -n "$host" ]] || die "Host name must not be empty"
-  [[ "$host" != -* ]] || die "Host name must not look like an option (starts with -): $host"
-  [[ "$host" != *[[:space:]]* ]] || die "Host name must not contain whitespace: $host"
-  [[ "$host" != *"/"* ]] || die "Host name must not contain '/': $host"
-  [[ "$host" != *"|"* ]] || die "Host name must not contain '|': $host"
-  [[ "$host" != *[[:cntrl:]]* ]] || die "Host name must not contain control characters: $host"
-}
-
-json_escape() {
-  local s=$1
-  s=${s//\\/\\\\}
-  s=${s//\"/\\\"}
-  s=${s//$'\n'/\\n}
-  s=${s//$'\r'/\\r}
-  s=${s//$'\t'/\\t}
-  printf '%s' "$s"
-}
-
-append_failed_marker() {
-  local round=$1
-  local type=$2
-  local host=$3
-  printf '{"_failed":true,"round":"%s","type":"%s","host":"%s"}\n' \
-    "$(json_escape "$round")" \
-    "$(json_escape "$type")" \
-    "$(json_escape "$host")"
-}
-
-default_hosts_config_path() {
-  local script_dir
-  script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-  echo "$script_dir/config/hosts.conf"
-}
-
-load_hosts_from_config() {
-  local config_path=$1
-  local line raw_key raw_val key val
-  local -a loaded4=()
-  local -a loaded6=()
-
-  [[ -f "$config_path" ]] || return 0
-
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line=$(trim "$line")
-    [[ -n "$line" ]] || continue
-    [[ "$line" == \#* ]] && continue
-
-    if [[ "$line" != *=* ]]; then
-      continue
-    fi
-
-    raw_key=${line%%=*}
-    raw_val=${line#*=}
-    key=$(trim "$raw_key")
-    val=$(trim "$raw_val")
-    key=${key,,}
-
-    [[ -n "$val" ]] || continue
-
-    case "$key" in
-      ipv4)
-        loaded4+=("$val")
-        ;;
-      ipv6)
-        loaded6+=("$val")
-        ;;
-    esac
-  done <"$config_path"
-
-  if ((${#loaded4[@]} > 0)); then
-    HOSTS_IPV4=("${loaded4[@]}")
-  fi
-  if ((${#loaded6[@]} > 0)); then
-    HOSTS_IPV6=("${loaded6[@]}")
-  fi
-}
-
-set_round_extra_args() {
-  local round=$1
-  case "$round" in
-    Standard) extra_args=() ;;
-    MTU1400) extra_args=(-s 1400) ;;
-    TOS_CS5) extra_args=(--tos 160) ;;
-    TOS_AF11) extra_args=(--tos 40) ;;
-    TTL10) extra_args=(-m 10) ;;
-    TTL64) extra_args=(-m 64) ;;
-    FirstTTL3) extra_args=(-f 3) ;;
-    Timeout5) extra_args=(-Z 5) ;;
-    *) extra_args=() ;;
-  esac
-}
-
-set_mtr_args_for_type() {
-  local type=$1
-  local -a base_mtr=(-b -i 1 -c 300 -r --json)
-  case "$type" in
-    ICMP4) mtr_args=(-4 "${base_mtr[@]}") ;;
-    ICMP6) mtr_args=(-6 "${base_mtr[@]}") ;;
-    UDP4) mtr_args=(-u -4 "${base_mtr[@]}") ;;
-    UDP6) mtr_args=(-u -6 "${base_mtr[@]}") ;;
-    TCP4) mtr_args=(-T -P 443 -4 "${base_mtr[@]}") ;;
-    TCP6) mtr_args=(-T -P 443 -6 "${base_mtr[@]}") ;;
-    MPLS4) mtr_args=(-e -4 "${base_mtr[@]}") ;;
-    MPLS6) mtr_args=(-e -6 "${base_mtr[@]}") ;;
-    AS4) mtr_args=(-z --aslookup -4 "${base_mtr[@]}") ;;
-    AS6) mtr_args=(-z --aslookup -6 "${base_mtr[@]}") ;;
-    *) die "Unknown test type: $type" ;;
-  esac
-}
-
-hosts_for_type() {
-  local type=$1
-  if [[ "$type" == *6 ]]; then
-    print_list "${HOSTS_IPV6[@]}"
-  else
-    print_list "${HOSTS_IPV4[@]}"
-  fi
-}
-
-log_line() {
-  local level=$1
-  shift
-  local msg=$*
-  if [[ "${QUIET:-0}" -eq 1 ]]; then
-    case "$level" in
-      WARN | FAIL | ERROR | SUMMARY) ;;
-      *) return 0 ;;
-    esac
-  fi
-
-  local line
-  line=$(printf '[%s] [%s] %s\n' "$(date +'%F %T')" "$level" "$msg")
-  if [[ -n "${TABLE_LOG:-}" ]]; then
-    (echo "$line" | tee -a -- "$TABLE_LOG") || echo "$line" >&2
-  else
-    echo "$line"
-  fi
-}
-
-summarize_json() {
-  local f=$1
-  local dst_name dst_ip
-  local table_out jq_status
-
-  dst_name=$(jq -r '(.report // {} | .dst_name? // .dst_addr? // .dst_ip? // .mtr.dst?) // "???"' "$f" 2>/dev/null) || true
-  dst_name="${dst_name:-???}"
-  dst_ip=$(jq -r '(.report // {} | .dst_addr? // .dst_ip? // .mtr.dst?) // "???"' "$f" 2>/dev/null) || true
-  dst_ip="${dst_ip:-???}"
-
-  table_out=$(jq -r '
-    ((.report // {}) | .hubs // [])[]? as $h |
-    [
-      ($h.count // 0),
-      ( $h.host // "???" | sub(" \\(.*"; "") ),
-      ( ($h.ip // ($h.host | if type == "string" and test("\\(.*\\)") then capture("\\((?<ip>[^)]+)\\)").ip else . end)) // "???" ),
-      ($h."Loss%" // 0),
-      ($h.Snt     // 0),
-      ($h.Last    // 0),
-      ($h.Avg     // 0),
-      ($h.Best    // 0),
-      ($h.Wrst    // 0),
-      ($h.StDev   // 0)
-    ] | map(tostring) | @tsv' "$f" 2>/dev/null | column -t -s $'\t')
-  jq_status=${PIPESTATUS[0]}
-
-  if [[ -n "${TABLE_LOG:-}" ]]; then
-    {
-      echo
-      echo "Results for: ${dst_name} (${dst_ip})"
-      printf 'Hop\tHost\tIP\tLoss%%\tSnt\tLast\tAvg\tBest\tWrst\tStDev\n'
-      if [[ -n "$table_out" ]]; then
-        echo "$table_out"
-      else
-        echo "(No results)"
-      fi
-      echo
-    } | tee -a -- "$TABLE_LOG" >/dev/null
-  else
-    echo
-    echo "Results for: ${dst_name} (${dst_ip})"
-    printf 'Hop\tHost\tIP\tLoss%%\tSnt\tLast\tAvg\tBest\tWrst\tStDev\n'
-    if [[ -n "$table_out" ]]; then
-      echo "$table_out"
-    else
-      echo "(No results)"
-    fi
-    echo
-  fi
-  return "$jq_status"
-}
-
-compute_run_plan() {
-  PLAN_ENTRIES=()
-
-  local round type host
-  local -a hosts=()
-  for round in "${ROUND_ORDER[@]}"; do
-    for type in "${TEST_ORDER[@]}"; do
-      mapfile -t hosts < <(hosts_for_type "$type")
-      for host in "${hosts[@]}"; do
-        PLAN_ENTRIES+=("$round|$type|$host")
-      done
-    done
-  done
-
-  TOTAL_RUNS=${#PLAN_ENTRIES[@]}
-}
-
-execute_single_run() {
-  local round=$1
-  local type=$2
-  local host=$3
-  local run_index=$4
-
-  local -a local_mtr_args=()
-  local -a local_extra_args=()
-
-  set_round_extra_args "$round"
-  local_extra_args=("${extra_args[@]}")
-
-  set_mtr_args_for_type "$type"
-  local_mtr_args=("${mtr_args[@]}")
-
-  log_line INFO "RUN [$run_index/$TOTAL_RUNS] round=$round type=$type host=$host"
-
-  if ((DRY_RUN)); then
-    log_line PLAN "mtr ${local_mtr_args[*]} ${local_extra_args[*]} $host"
-    return 0
-  fi
-
-  CURRENT_TMP=$(mktemp "${TMPDIR:-/tmp}/mtr-suite.XXXXXXXX")
-
-  if mtr "${local_mtr_args[@]}" "${local_extra_args[@]}" "$host" >"$CURRENT_TMP" 2>>"$TABLE_LOG"; then
-    cat "$CURRENT_TMP" >>"$JSON_LOG"
-    printf '\n' >>"$JSON_LOG"
-
-    if ((DO_SUMMARY)); then
-      if ! summarize_json "$CURRENT_TMP"; then
-        log_line WARN "summary failed for round=$round type=$type host=$host"
-      fi
-    fi
-
-    ((RUN_OK++)) || true
-    log_line OK "round=$round type=$type host=$host"
-  else
-    {
-      append_failed_marker "$round" "$type" "$host"
-      cat "$CURRENT_TMP"
-      printf '\n'
-    } >>"$JSON_LOG"
-
-    ((RUN_FAIL++)) || true
-    log_line FAIL "round=$round type=$type host=$host"
-  fi
-
-  rm -f -- "$CURRENT_TMP"
-  CURRENT_TMP=""
-}
-
 main() {
   local log_dir="${LOG_DIR:-$HOME/logs}"
   local json_log=""
@@ -424,17 +74,20 @@ main() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --log-dir)
-        require_path_option "--log-dir" $# "$2"
+        [[ $# -ge 2 ]] || die "--log-dir requires an argument"
+        validate_path_option "--log-dir" "$2"
         log_dir=$2
         shift 2
         ;;
       --json-log)
-        require_path_option "--json-log" $# "$2"
+        [[ $# -ge 2 ]] || die "--json-log requires an argument"
+        validate_path_option "--json-log" "$2"
         json_log=$2
         shift 2
         ;;
       --table-log)
-        require_path_option "--table-log" $# "$2"
+        [[ $# -ge 2 ]] || die "--table-log requires an argument"
+        validate_path_option "--table-log" "$2"
         table_log=$2
         shift 2
         ;;
@@ -498,6 +151,9 @@ main() {
 
   [[ $# -eq 0 ]] || die "Unexpected positional args: $*"
 
+  # Validate log_dir regardless of source (env, CLI, or default)
+  validate_path_option "log-dir" "$log_dir"
+
   require_bash4
 
   if ((list_types)); then
@@ -555,7 +211,7 @@ main() {
   local ts
   local would_json_log=""
   local would_table_log=""
-  ts=$(date +'%Y%m%d_%H%M%S')
+  ts=$(date +'%Y%m%d_%H%M%S')_$$
 
   if ((DRY_RUN)); then
     would_json_log=${json_log:-"$log_dir/mtr_results_${ts}.json.log"}
@@ -566,12 +222,12 @@ main() {
     JSON_LOG=${json_log:-"$log_dir/mtr_results_${ts}.json.log"}
     TABLE_LOG=${table_log:-"$log_dir/mtr_summary_${ts}.log"}
 
-    mkdir -p -- "$log_dir"
+    mkdir -p -- "$log_dir" || die "Failed to create log directory: $log_dir"
     if [[ -n "$json_log" ]]; then
-      mkdir -p -- "$(dirname "$JSON_LOG")"
+      mkdir -p -- "$(dirname "$JSON_LOG")" || die "Failed to create directory for JSON log"
     fi
     if [[ -n "$table_log" ]]; then
-      mkdir -p -- "$(dirname "$TABLE_LOG")"
+      mkdir -p -- "$(dirname "$TABLE_LOG")" || die "Failed to create directory for table log"
     fi
 
     if [[ -d "$JSON_LOG" ]] || [[ -d "$TABLE_LOG" ]]; then
@@ -583,7 +239,17 @@ main() {
   fi
 
   CURRENT_TMP=""
-  trap 'rm -f "${CURRENT_TMP:-}" 2>/dev/null; echo "Interrupted" >&2; exit 130' INT TERM
+  cleanup_and_exit() {
+    local sig=${1:-}
+    local code=${2:-130}
+    rm -f "${CURRENT_TMP:-}" 2>/dev/null
+    if [[ -n "$sig" ]]; then
+      echo "Interrupted (SIG$sig)" >&2
+      exit "$code"
+    fi
+  }
+  trap 'cleanup_and_exit INT 130' INT
+  trap 'cleanup_and_exit TERM 143' TERM
   trap 'rm -f "${CURRENT_TMP:-}" 2>/dev/null' EXIT
 
   compute_run_plan
@@ -634,4 +300,6 @@ main() {
   fi
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
