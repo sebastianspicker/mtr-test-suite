@@ -63,7 +63,7 @@ install_pinned_binary() {
   echo "Installing $name v${version}"
   local tmpdir
   tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' RETURN
+  trap 'rm -rf "${tmpdir:-}"' RETURN
 
   if [[ "$is_tarball" -eq 1 ]]; then
     local archive="$tmpdir/$name.tar.xz"
