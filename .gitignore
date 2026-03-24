@@ -27,6 +27,8 @@ Thumbs.db
 .vscode/
 .history/
 .codex/
+.cursor/
+.claude/
 
 # Local docs (findings/logs/decisions)
 DECISIONS.md
