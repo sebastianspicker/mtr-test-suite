@@ -1,0 +1,30 @@
+=== bash mtr-test-suite.sh --help ===
+mtr-test-suite.sh v1.1.0
+
+Runs an MTR test matrix (types x rounds x hosts) and writes:
+  - JSON_LOG: raw per-run JSON output
+  - TABLE_LOG: human-readable summaries and progress
+
+Default log directory: LOG_DIR env or ~/logs.
+Default host config: ./config/hosts.conf (loaded when present).
+
+Usage:
+  ./mtr-test-suite.sh [options]
+
+Options:
+  --log-dir DIR      Log directory (default: ~/logs)
+  --json-log PATH    Override JSON_LOG path
+  --table-log PATH   Override TABLE_LOG path
+  --types CSV        Run selected test types (e.g. ICMP4,TCP4)
+  --rounds CSV       Run selected rounds (e.g. Standard,TTL64)
+  --hosts4 CSV       Override IPv4 hosts (comma-separated)
+  --hosts6 CSV       Override IPv6 hosts (comma-separated)
+  --list-types       Print supported test types and exit
+  --list-rounds      Print supported rounds and exit
+  --no-summary       Skip jq/column summary tables (JSON still logged)
+  --dry-run          Print planned runs only; no files created
+  --quiet            Print warnings/failures and final summary only
+  -h, --help         Show this help
+  --version          Print version
+
+Exit code: 0

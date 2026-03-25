@@ -1,0 +1,28 @@
+=== bash mtr-test-suite.sh --dry-run --types ICMP4 --hosts4 8.8.8.8 ===
+[2026-03-25 19:37:14] [INFO] Starting MTR tests (planned runs: 8)
+[2026-03-25 19:37:14] [INFO] Selected rounds: Standard MTU1400 TOS_CS5 TOS_AF11 TTL10 TTL64 FirstTTL3 Timeout5
+[2026-03-25 19:37:14] [INFO] Selected types: ICMP4
+[2026-03-25 19:37:14] [INFO] IPv4 hosts: 8.8.8.8
+[2026-03-25 19:37:14] [INFO] IPv6 hosts: netcologne.de google.com wikipedia.org
+[2026-03-25 19:37:14] [SUMMARY] Dry-run only. Planned runs: 8
+[2026-03-25 19:37:14] [SUMMARY] Would write JSON_LOG=/Users/sebastian/logs/mtr_results_20260325_193714_45510.json.log
+[2026-03-25 19:37:14] [SUMMARY] Would write TABLE_LOG=/Users/sebastian/logs/mtr_summary_20260325_193714_45510.log
+[2026-03-25 19:37:14] [INFO] RUN [1/8] round=Standard type=ICMP4 host=8.8.8.8
+[2026-03-25 19:37:14] [PLAN] mtr -4 -b -i 1 -c 300 -r --json  8.8.8.8
+[2026-03-25 19:37:14] [INFO] RUN [2/8] round=MTU1400 type=ICMP4 host=8.8.8.8
+[2026-03-25 19:37:14] [PLAN] mtr -4 -b -i 1 -c 300 -r --json -s 1400 8.8.8.8
+[2026-03-25 19:37:14] [INFO] RUN [3/8] round=TOS_CS5 type=ICMP4 host=8.8.8.8
+[2026-03-25 19:37:14] [PLAN] mtr -4 -b -i 1 -c 300 -r --json --tos 160 8.8.8.8
+[2026-03-25 19:37:14] [INFO] RUN [4/8] round=TOS_AF11 type=ICMP4 host=8.8.8.8
+[2026-03-25 19:37:14] [PLAN] mtr -4 -b -i 1 -c 300 -r --json --tos 40 8.8.8.8
+[2026-03-25 19:37:14] [INFO] RUN [5/8] round=TTL10 type=ICMP4 host=8.8.8.8
+[2026-03-25 19:37:14] [PLAN] mtr -4 -b -i 1 -c 300 -r --json -m 10 8.8.8.8
+[2026-03-25 19:37:14] [INFO] RUN [6/8] round=TTL64 type=ICMP4 host=8.8.8.8
+[2026-03-25 19:37:14] [PLAN] mtr -4 -b -i 1 -c 300 -r --json -m 64 8.8.8.8
+[2026-03-25 19:37:14] [INFO] RUN [7/8] round=FirstTTL3 type=ICMP4 host=8.8.8.8
+[2026-03-25 19:37:14] [PLAN] mtr -4 -b -i 1 -c 300 -r --json -f 3 8.8.8.8
+[2026-03-25 19:37:14] [INFO] RUN [8/8] round=Timeout5 type=ICMP4 host=8.8.8.8
+[2026-03-25 19:37:14] [PLAN] mtr -4 -b -i 1 -c 300 -r --json -Z 5 8.8.8.8
+[2026-03-25 19:37:14] [SUMMARY] Dry-run complete. Planned runs: 8
+
+Exit code: 0

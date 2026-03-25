@@ -1,0 +1,4 @@
+# Require maintainer review for CI/CD and security-sensitive files.
+/.github/workflows/  @sebastianspicker
+/.github/CODEOWNERS  @sebastianspicker
+/scripts/            @sebastianspicker

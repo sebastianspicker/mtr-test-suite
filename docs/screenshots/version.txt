@@ -1,0 +1,24 @@
+=== bash mtr-test-suite.sh --version ===
+mtr-test-suite.sh v1.1.0
+
+=== bash mtr-test-suite.sh --list-types ===
+ICMP4
+ICMP6
+UDP4
+UDP6
+TCP4
+TCP6
+MPLS4
+MPLS6
+AS4
+AS6
+
+=== bash mtr-test-suite.sh --list-rounds ===
+Standard
+MTU1400
+TOS_CS5
+TOS_AF11
+TTL10
+TTL64
+FirstTTL3
+Timeout5
